@@ -273,32 +273,6 @@ KIOSK_HTML = r"""
         box-shadow: 0 0 10px rgba(255,80,80,0.8);
     }
     .mic-dot.on { background: #46ffb0; box-shadow: 0 0 10px rgba(70,255,176,0.9); }
-
-    .start-overlay {
-        position: fixed; inset: 0; z-index: 10;
-        background: rgba(5, 7, 12, 0.88);
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        gap: 18px;
-        cursor: pointer;
-        transition: opacity .4s ease;
-    }
-    .start-overlay.hidden { opacity: 0; pointer-events: none; }
-    .start-overlay .start-btn {
-        width: 96px; height: 96px; border-radius: 50%;
-        background: radial-gradient(circle at 35% 30%, #24e0ff, #0072ff 60%, #001b3d 100%);
-        box-shadow: 0 0 40px rgba(0,190,255,0.55), 0 0 90px rgba(0,140,255,0.35);
-        display: flex; align-items: center; justify-content: center;
-        animation: pulse 1.8s ease-in-out infinite;
-    }
-    @keyframes pulse {
-        0%   { box-shadow: 0 0 40px rgba(0,190,255,0.5), 0 0 90px rgba(0,140,255,0.3); }
-        50%  { box-shadow: 0 0 60px rgba(0,190,255,0.8), 0 0 130px rgba(0,140,255,0.5); }
-        100% { box-shadow: 0 0 40px rgba(0,190,255,0.5), 0 0 90px rgba(0,140,255,0.3); }
-    }
-    .start-overlay .start-btn svg { width: 40px; height: 40px; }
-    .start-overlay .start-text { color: #eaf6ff; font-size: 16px; letter-spacing: 1px; font-weight: 600; }
-    .start-overlay .start-sub { color: #7fd0ef; font-size: 13px; opacity: 0.8; }
 </style>
 </head>
 <body>
@@ -336,16 +310,6 @@ KIOSK_HTML = r"""
     <div class="pill">
         <div class="line1" id="pillLine1">I am your PXT AI Assistant</div>
         <div class="line2" id="pillLine2">Say "Hi PXT" to start...</div>
-    </div>
-
-    <div class="start-overlay" id="startOverlay">
-        <div class="start-btn">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 5v14l11-7-11-7z" fill="#eafcff"/>
-            </svg>
-        </div>
-        <div class="start-text">Tap to Start PXT Hub</div>
-        <div class="start-sub">Enables video sound &amp; microphone</div>
     </div>
 </div>
 
@@ -537,19 +501,23 @@ KIOSK_HTML = r"""
         try { recognition.start(); } catch (e) { /* ignore */ }
     }
 
-    // Kick things off: browsers require a user gesture to play audio with sound,
-    // so we start muted+looping immediately, then unmute + start the mic on tap.
+    // Kiosk mode: everything starts automatically on load — video plays with sound
+    // and the mic begins listening right away. No tap/click required.
+    // NOTE: for the video to play WITH SOUND automatically, Chrome must be launched
+    // with the flag --autoplay-policy=no-user-gesture-required (see deployment notes).
     window.addEventListener("load", function () {
-        try { bgVideo.play(); } catch (e) {}
-    });
-
-    const startOverlay = document.getElementById('startOverlay');
-    startOverlay.addEventListener('click', function () {
         bgVideo.muted = false;
-        bgVideo.play().catch(function () {});
-        startOverlay.classList.add('hidden');
-        initRecognition();
-        // Unlock speechSynthesis on some browsers with a silent warm-up utterance.
+        bgVideo.play().catch(function () {
+            // Autoplay-with-sound was blocked by the browser. Fall back to muted
+            // playback so the video still runs, and keep retrying unmute shortly.
+            bgVideo.muted = true;
+            bgVideo.play().catch(function () {});
+            const retryUnmute = setInterval(function () {
+                bgVideo.muted = false;
+                bgVideo.play().then(function () { clearInterval(retryUnmute); }).catch(function () {});
+            }, 3000);
+        });
+        setTimeout(initRecognition, 300);
         try {
             const warm = new SpeechSynthesisUtterance(' ');
             warm.volume = 0;
