@@ -1,5 +1,11 @@
-login_id,name,language,leaves_remaining,off_days,status
-EMP001,Ahmed Ali,Arabic,4,Friday,Present
-EMP002,John Doe,English,2,Saturday,Absent
-EMP003,Priya Sharma,Hindi,5,Sunday,Present
-EMP004,Kintu Moses,Ugandan,3,Sunday,Present
+EmployeeID,Name,Status,RemainingLeaves,NextOffDay
+EMP001,Ahmed Ali,Present,12,Friday
+EMP002,Sarah Khan,Absent,8,Saturday
+EMP003,John Mathews,Present,15,Sunday
+EMP004,Fatima Noor,Present,5,Friday
+EMP005,Michael Chen,On Leave,2,Monday
+EMP006,Priya Sharma,Present,18,Saturday
+EMP007,Youssef Ibrahim,Present,10,Friday
+EMP008,Emma Wilson,Absent,7,Sunday
+EMP009,Hassan Raza,Present,14,Friday
+EMP010,Linda Torres,Present,9,Saturday
