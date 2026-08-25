@@ -273,6 +273,23 @@ KIOSK_HTML = r"""
         box-shadow: 0 0 10px rgba(255,80,80,0.8);
     }
     .mic-dot.on { background: #46ffb0; box-shadow: 0 0 10px rgba(70,255,176,0.9); }
+
+    .debug-caption {
+        position: fixed;
+        top: 22px; left: 50%; transform: translateX(-50%);
+        z-index: 3;
+        color: #7fd0ef;
+        font-size: 13px;
+        letter-spacing: 0.3px;
+        background: rgba(10,16,26,0.55);
+        padding: 6px 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(80,200,255,0.2);
+        max-width: 80vw;
+        text-align: center;
+        opacity: 0.85;
+        min-height: 14px;
+    }
 </style>
 </head>
 <body>
@@ -283,6 +300,7 @@ KIOSK_HTML = r"""
     <div class="scrim"></div>
 
     <div class="mic-dot" id="micDot" title="Microphone status"></div>
+    <div class="debug-caption" id="debugCaption">&nbsp;</div>
 
     <div class="brand">PXT&nbsp;HUB</div>
 
@@ -328,6 +346,7 @@ KIOSK_HTML = r"""
     const rLeaves = document.getElementById('rLeaves');
     const rNext = document.getElementById('rNext');
     const bgVideo = document.getElementById('bgVideo');
+    const debugCaption = document.getElementById('debugCaption');
 
     if (VIDEO_SRC && VIDEO_SRC.trim() !== "") {
         bgVideo.src = VIDEO_SRC;
@@ -338,12 +357,20 @@ KIOSK_HTML = r"""
         });
     }
 
-    const WAKE_WORDS = ["hi pxt", "hey pxt", "hi p x t", "hey p x t", "hi pixt", "hi packed", "hi pxth", "hi pixie"];
+    const WAKE_WORDS = [
+        "hi pxt", "hey pxt", "hi p x t", "hey p x t", "hi pixt", "hey pixt",
+        "hi packed", "hi pxth", "hi pixie", "hi pxt hub", "hey pxt hub",
+        "hi pecked", "hi picked", "hi pact", "hi packt", "hi paxt",
+        "hi pekst", "hi pixt hub", "hi pex", "hey pex", "hi pixty",
+        "hi pixty t", "hi p60", "hi picture", "hi pks t", "hi bxt", "hey bxt"
+    ];
 
     let state = "idle"; // idle | awaiting_id | result
     let recognition = null;
     let shouldRun = true;
     let resetTimer = null;
+    let lastResultAt = Date.now();
+    let watchdog = null;
 
     function setPill(line1, line2) {
         pillLine1.textContent = line1;
@@ -450,34 +477,20 @@ KIOSK_HTML = r"""
             setPill("Voice not supported", "Please use Chrome or Edge browser");
             return;
         }
-
-        // Requesting the mic ourselves first, with echoCancellation/noiseSuppression/
-        // autoGainControl turned off, reduces the chance that Windows tags this as a
-        // "communications" audio session and ducks/mutes other app sounds (e.g. the
-        // banner video). The stream itself isn't used by SpeechRecognition directly,
-        // but the permission + constraint negotiation happens before recognition starts.
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-            }).then(function (stream) {
-                stream.getTracks().forEach(function (t) { t.stop(); });
-                startSpeechRecognition(SpeechRecognition);
-            }).catch(function () {
-                startSpeechRecognition(SpeechRecognition);
-            });
-        } else {
-            startSpeechRecognition(SpeechRecognition);
-        }
+        startSpeechRecognition(SpeechRecognition);
     }
 
     function startSpeechRecognition(SpeechRecognition) {
         recognition = new SpeechRecognition();
         recognition.continuous = true;
-        recognition.interimResults = false;
+        recognition.interimResults = true;
         recognition.lang = "en-US";
         recognition.maxAlternatives = 1;
 
-        recognition.onstart = function () { micDot.classList.add("on"); };
+        recognition.onstart = function () {
+            micDot.classList.add("on");
+            if (state === "idle") debugCaption.textContent = "Listening... say \"Hi PXT\"";
+        };
         recognition.onend = function () {
             micDot.classList.remove("on");
             if (shouldRun) {
@@ -489,8 +502,16 @@ KIOSK_HTML = r"""
         recognition.onerror = function (e) {
             // no-speech / audio-capture / network errors are recoverable — just let onend restart it.
             micDot.classList.remove("on");
+            debugCaption.textContent = "mic error: " + e.error;
         };
         recognition.onresult = function (event) {
+            lastResultAt = Date.now();
+            let liveText = "";
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                liveText += event.results[i][0].transcript;
+            }
+            debugCaption.textContent = "Heard: " + liveText;
+
             const last = event.results[event.results.length - 1];
             if (last.isFinal) {
                 const transcript = last[0].transcript;
@@ -499,6 +520,16 @@ KIOSK_HTML = r"""
         };
 
         try { recognition.start(); } catch (e) { /* ignore */ }
+
+        clearInterval(watchdog);
+        watchdog = setInterval(function () {
+            if (state === "idle" && Date.now() - lastResultAt > 12000) {
+                debugCaption.textContent = "No audio detected — restarting mic...";
+                try { recognition.stop(); } catch (e) {}
+                try { recognition.abort(); } catch (e) {}
+                lastResultAt = Date.now();
+            }
+        }, 4000);
     }
 
     // Kiosk mode: everything starts automatically on load — video plays with sound
