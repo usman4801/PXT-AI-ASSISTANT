@@ -1,9 +1,12 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
 
-st.set_page_config(page_title="PXT HR Kiosk", page_icon="🤖", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(
+    page_title="PXT HR Kiosk", page_icon="🤖", layout="wide", initial_sidebar_state="collapsed"
+)
 
-st.markdown("""
+st.markdown(
+    """
     <style>
     .stApp { background-color: #000000; color: #FFFFFF; margin: 0; padding: 0; }
     #MainMenu {visibility: hidden;}
@@ -11,32 +14,37 @@ st.markdown("""
     header {visibility: hidden;}
     .block-container { padding: 0 !important; max-width: 100% !important; }
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
+# Load Staff Data
 try:
-    df = pd.read_csv("staff_data.csv")
+  df = pd.read_csv("staff_data.csv")
 except:
-    data = {
-        "login_id": ["EMP001", "EMP002", "EMP003", "EMP004"],
-        "name": ["Ahmed Ali", "John Doe", "Priya Sharma", "Kintu Moses"],
-        "language": ["Arabic", "English", "Hindi", "Ugandan"],
-        "leaves_remaining": [4, 2, 5, 3],
-        "off_days": ["Friday", "Saturday", "Sunday", "Sunday"],
-        "status": ["Present", "Absent", "Present", "Present"]
-    }
-    df = pd.DataFrame(data)
+  data = {
+      "login_id": ["EMP001", "EMP002", "EMP003", "EMP004"],
+      "name": ["Ahmed Ali", "John Doe", "Priya Sharma", "Kintu Moses"],
+      "language": ["Arabic", "English", "Hindi", "Ugandan"],
+      "leaves_remaining": [4, 2, 5, 3],
+      "off_days": ["Friday", "Saturday", "Sunday", "Sunday"],
+      "status": ["Present", "Absent", "Present", "Present"],
+  }
+  df = pd.DataFrame(data)
 
+# Admin Panel Sidebar
 with st.sidebar:
-    st.subheader("PXT Admin Panel")
-    pwd = st.text_input("Admin Password", type="password")
-    if pwd == "pxt123":
-        st.success("Access Granted")
-        up = st.file_uploader("Update staff_data.csv", type=["csv"])
-        if up:
-            pd.read_csv(up).to_csv("staff_data.csv", index=False)
-            st.rerun()
-        st.dataframe(df)
+  st.subheader("PXT Admin Panel")
+  pwd = st.text_input("Admin Password", type="password")
+  if pwd == "pxt123":
+    st.success("Access Granted")
+    up = st.file_uploader("Update staff_data.csv", type=["csv"])
+    if up:
+      pd.read_csv(up).to_csv("staff_data.csv", index=False)
+      st.rerun()
+    st.dataframe(df)
 
+# Kiosk HTML & JS with reliable fallback background gradient + video support
 html_kiosk = f"""
 <!DOCTYPE html>
 <html>
@@ -44,31 +52,34 @@ html_kiosk = f"""
     <style>
         body, html {{
             margin: 0; padding: 0; width: 100vw; height: 100vh;
-            background: #000; overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; color: white;
+            background: radial-gradient(circle at center, #0B1120 0%, #000000 100%);
+            overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; color: white;
         }}
         .video-container {{
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.8;
         }}
         video {{ width: 100%; height: 100%; object-fit: cover; }}
         .overlay-content {{
-            position: absolute; bottom: 40px; width: 100%; z-index: 10; text-align: center;
+            position: absolute; bottom: 50px; width: 100%; z-index: 10; text-align: center;
         }}
         .status-pill {{
-            background: rgba(10, 15, 30, 0.85);
-            border: 1px solid rgba(59, 130, 246, 0.4);
-            display: inline-block; padding: 20px 40px; border-radius: 35px;
-            box-shadow: 0 0 30px rgba(59, 130, 246, 0.3); backdrop-filter: blur(10px); max-width: 650px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            display: inline-block; padding: 22px 45px; border-radius: 40px;
+            box-shadow: 0 0 40px rgba(59, 130, 246, 0.4); backdrop-filter: blur(12px); max-width: 700px;
         }}
-        h2 {{ margin: 0 0 10px 0; color: #60a5fa; font-size: 26px; }}
+        h2 {{ margin: 0 0 10px 0; color: #60a5fa; font-size: 28px; text-shadow: 0 0 10px rgba(96,165,250,0.5); }}
         p {{ margin: 5px 0; font-size: 18px; color: #e2e8f0; }}
     </style>
 </head>
 <body>
     <div class="video-container">
         <video autoplay muted loop playsinline>
-            <source src="https://assets.mixkit.co/videos/preview/mixkit-digital-animation-of-a-human-face-41555-large.mp4" type="video/mp4">
+            <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" type="video/mp4">
+            Your browser does not support the video tag.
         </video>
     </div>
+
     <div class="overlay-content">
         <div class="status-pill" id="statusBox">
             <h2 id="titleText">I am your PXT AI Assistant</h2>
@@ -105,6 +116,8 @@ html_kiosk = f"""
 
             recognition.onresult = function(event) {{
                 const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+                console.log("Heard: " + transcript);
+
                 if (isListeningForWakeWord) {{
                     if (transcript.includes('pxt') || transcript.includes('hi pxt') || transcript.includes('hey pxt')) {{
                         isListeningForWakeWord = false;
@@ -149,4 +162,5 @@ html_kiosk = f"""
 """
 
 import streamlit.components.v1 as components
+
 components.html(html_kiosk, height=950, scrolling=False)
