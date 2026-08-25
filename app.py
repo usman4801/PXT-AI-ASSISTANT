@@ -1,3 +1,4 @@
+import base64
 import pandas as pd
 import streamlit as st
 
@@ -32,6 +33,16 @@ except:
   }
   df = pd.DataFrame(data)
 
+# Read local banner.mp4 and encode to base64 for reliable browser rendering
+try:
+  with open("banner.mp4", "rb") as video_file:
+    video_bytes = video_file.read()
+    video_base64 = base64.b64encode(video_bytes).decode("utf-8")
+    video_src = f"data:video/mp4;base64,{video_base64}"
+except:
+  # Fallback if file not found
+  video_src = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+
 # Admin Panel Sidebar
 with st.sidebar:
   st.subheader("PXT Admin Panel")
@@ -44,7 +55,7 @@ with st.sidebar:
       st.rerun()
     st.dataframe(df)
 
-# Kiosk HTML & JS with reliable fallback background gradient + video support
+# Kiosk HTML & JS with local banner.mp4
 html_kiosk = f"""
 <!DOCTYPE html>
 <html>
@@ -52,30 +63,29 @@ html_kiosk = f"""
     <style>
         body, html {{
             margin: 0; padding: 0; width: 100vw; height: 100vh;
-            background: radial-gradient(circle at center, #0B1120 0%, #000000 100%);
-            overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; color: white;
+            background: #000; overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; color: white;
         }}
         .video-container {{
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.8;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;
         }}
         video {{ width: 100%; height: 100%; object-fit: cover; }}
         .overlay-content {{
-            position: absolute; bottom: 50px; width: 100%; z-index: 10; text-align: center;
+            position: absolute; bottom: 40px; width: 100%; z-index: 10; text-align: center;
         }}
         .status-pill {{
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(59, 130, 246, 0.5);
-            display: inline-block; padding: 22px 45px; border-radius: 40px;
-            box-shadow: 0 0 40px rgba(59, 130, 246, 0.4); backdrop-filter: blur(12px); max-width: 700px;
+            background: rgba(10, 15, 30, 0.85);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            display: inline-block; padding: 20px 40px; border-radius: 35px;
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.3); backdrop-filter: blur(10px); max-width: 650px;
         }}
-        h2 {{ margin: 0 0 10px 0; color: #60a5fa; font-size: 28px; text-shadow: 0 0 10px rgba(96,165,250,0.5); }}
+        h2 {{ margin: 0 0 10px 0; color: #60a5fa; font-size: 26px; }}
         p {{ margin: 5px 0; font-size: 18px; color: #e2e8f0; }}
     </style>
 </head>
 <body>
     <div class="video-container">
         <video autoplay muted loop playsinline>
-            <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" type="video/mp4">
+            <source src="{video_src}" type="video/mp4">
             Your browser does not support the video tag.
         </video>
     </div>
