@@ -60,6 +60,9 @@ def load_staff_data() -> pd.DataFrame:
 def df_to_json_records(df: pd.DataFrame) -> str:
     records = df.to_dict(orient="records")
     # Keys used by the JS layer are lowercase / normalized for matching.
+    # "Aliases" is optional: pipe-separated alternate spellings / native-script
+    # names (e.g. "عثمان|Usman|Osman") so the same employee can be recognized
+    # regardless of which language/script they say their name in.
     cleaned = [
         {
             "id": str(r.get("EmployeeID", "")).strip(),
@@ -67,10 +70,13 @@ def df_to_json_records(df: pd.DataFrame) -> str:
             "status": str(r.get("Status", "")).strip(),
             "leaves": str(r.get("RemainingLeaves", "")).strip(),
             "nextoff": str(r.get("NextOffDay", "")).strip(),
+            "aliases": [
+                a.strip() for a in str(r.get("Aliases", "")).split("|") if a.strip()
+            ],
         }
         for r in records
     ]
-    return json.dumps(cleaned)
+    return json.dumps(cleaned, ensure_ascii=False)
 
 
 # --------------------------------------------------------------------------
@@ -365,42 +371,68 @@ KIOSK_HTML = r"""
         });
     }
 
-    // Exact-phrase matching was too brittle — the recognizer reliably hears
-    // "hi"/"high"/"hey" and the "px" sound, but the trailing consonant of "PXT"
-    // is unreliable (often heard as "pxd", "pxt", "pect", etc). So we match
-    // loosely: a greeting word, plus something that sounds like "px".
-    function isWakeWord(t) {
-        const hasGreeting = /\b(hi|high|hey|hai|hey)\b/.test(t);
-        const hasPX = /\bp\s?x\s?[a-z]{0,3}\b/.test(t) || t.replace(/\s+/g, "").includes("px");
-        return hasGreeting && hasPX;
-    }
+    // ---- Multilingual configuration -----------------------------------
+    // Wake word ("Hi PXT") is always listened for in English — like "Hey Siri"
+    // or "Alexa", a short fixed brand phrase is kept in one language everywhere,
+    // regardless of what language the employee speaks afterwards.
+    const WAKE_LANG = "en-US";
 
-    let state = "idle"; // idle | awaiting_id | result
-    let recognition = null;
-    let shouldRun = true;
-    let resetTimer = null;
-    let lastResultAt = Date.now();
-    let watchdog = null;
+    // After the wake word, the kiosk cycles through these languages to capture
+    // the employee's name/login, a few seconds each, until one of them matches.
+    // Add/remove/reorder languages here as needed.
+    const LANGUAGES = [
+        { code: "en-US", label: "English",  prompt: "Kindly tell me your login or name.",
+          reply: (n,s,l,d) => `Hello ${n}. Your status is ${s}. You have ${l} leaves remaining. Your next off day is ${d}.`,
+          sorry: "Sorry, I could not find your record. Please try again." },
+        { code: "ur-PK", label: "Urdu",     prompt: "براہ مہربانی اپنا نام یا لاگ ان بتائیں۔",
+          reply: (n,s,l,d) => `السلام علیکم ${n}۔ آپ کی حاضری کی صورتحال ${s} ہے۔ آپ کی ${l} چھٹیاں باقی ہیں۔ آپ کی اگلی چھٹی کا دن ${d} ہے۔`,
+          sorry: "معذرت، آپ کا ریکارڈ نہیں ملا۔ دوبارہ کوشش کریں۔" },
+        { code: "hi-IN", label: "Hindi",    prompt: "कृपया अपना नाम या लॉगिन बताएं।",
+          reply: (n,s,l,d) => `नमस्ते ${n}। आपकी स्थिति ${s} है। आपकी ${l} छुट्टियाँ शेष हैं। आपका अगला अवकाश दिन ${d} है।`,
+          sorry: "क्षमा करें, आपका रिकॉर्ड नहीं मिला। कृपया पुनः प्रयास करें।" },
+        { code: "ar-SA", label: "Arabic",   prompt: "من فضلك أخبرني باسمك أو رقم الدخول.",
+          reply: (n,s,l,d) => `مرحباً ${n}. حالتك هي ${s}. لديك ${l} إجازة متبقية. يوم إجازتك القادم هو ${d}.`,
+          sorry: "عذراً، لم يتم العثور على سجلك. حاول مرة أخرى." },
+        { code: "am-ET", label: "Amharic",  prompt: "እባክዎ ስምዎን ወይም መግቢያዎን ይንገሩኝ።",
+          reply: (n,s,l,d) => `ሰላም ${n}። ሁኔታዎ ${s} ነው። ${l} ቀሪ የእረፍት ቀናት አሉዎት። ቀጣዩ የእረፍት ቀንዎ ${d} ነው።`,
+          sorry: "ይቅርታ፣ መዝገብዎ አልተገኘም። እባክዎ ደግመው ይሞክሩ።" },
+        { code: "sw-KE", label: "Swahili",  prompt: "Tafadhali niambie jina lako au namba yako ya kuingia.",
+          reply: (n,s,l,d) => `Habari ${n}. Hali yako ni ${s}. Una likizo ${l} zilizobaki. Siku yako ijayo ya mapumziko ni ${d}.`,
+          sorry: "Samahani, sikuweza kupata rekodi yako. Tafadhali jaribu tena." }
+    ];
+    // NOTE: Amharic/Swahili/Urdu/Hindi/Arabic phrases above are best-effort
+    // machine translations for this demo/testing build. Have a native speaker
+    // review and correct them before using this with real staff.
+
+    let langIndex = 0;
+    let nameRecognition = null;
+    let nameCycleTimer = null;
+    let nameCycleDeadline = 0;
 
     function setPill(line1, line2) {
         pillLine1.textContent = line1;
         pillLine2.textContent = line2;
     }
 
-    function speak(text, onend) {
+    function speak(text, lang, onend) {
         try {
             window.speechSynthesis.cancel();
             const utter = new SpeechSynthesisUtterance(text);
             utter.rate = 1.0;
             utter.pitch = 1.0;
-            utter.lang = "en-US";
+            utter.lang = lang || "en-US";
             if (onend) utter.onend = onend;
             window.speechSynthesis.speak(utter);
         } catch (e) { /* speech synthesis unsupported */ }
     }
 
+    // Unicode-aware normalize: keeps letters/numbers from ANY script (Latin,
+    // Arabic, Devanagari, Ethiopic, etc.) instead of stripping everything down
+    // to a-z0-9, which used to silently break non-English matching.
     function normalize(s) {
-        return (s || "").toLowerCase().trim().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ");
+        return (s || "").toLowerCase().trim()
+            .replace(/[^\p{L}\p{N}\s]/gu, "")
+            .replace(/\s+/g, " ");
     }
 
     function findStaff(transcript) {
@@ -408,19 +440,24 @@ KIOSK_HTML = r"""
         const tNoSpace = t.replace(/\s+/g, "");
         if (!t) return null;
 
-        // 1) Try login/employee ID match (e.g. "emp001")
+        // 1) Employee ID match (e.g. "emp001")
         for (const s of STAFF) {
             const idNorm = normalize(s.id).replace(/\s+/g, "");
-            if (idNorm && (tNoSpace.includes(idNorm) || idNorm.includes(tNoSpace))) {
-                return s;
-            }
+            if (idNorm && (tNoSpace.includes(idNorm) || idNorm.includes(tNoSpace))) return s;
         }
-        // 2) Try full name match
+        // 2) Full name match (Latin "Name" column)
         for (const s of STAFF) {
             const nameNorm = normalize(s.name);
             if (nameNorm && t.includes(nameNorm)) return s;
         }
-        // 3) Try partial / token match (all tokens of the staff name present in transcript)
+        // 3) Alias match — native-script / alternate-spelling names
+        for (const s of STAFF) {
+            for (const alias of (s.aliases || [])) {
+                const aliasNorm = normalize(alias);
+                if (aliasNorm && t.includes(aliasNorm)) return s;
+            }
+        }
+        // 4) Partial / token match on the Latin name (all tokens present)
         for (const s of STAFF) {
             const tokens = normalize(s.name).split(" ").filter(Boolean);
             if (tokens.length && tokens.every(tok => t.includes(tok))) return s;
@@ -435,7 +472,7 @@ KIOSK_HTML = r"""
         return "status-other";
     }
 
-    function showResult(staff) {
+    function showResult(staff, langCfg) {
         state = "result";
         resultCard.classList.add("show");
         rName.textContent = staff.name;
@@ -447,9 +484,9 @@ KIOSK_HTML = r"""
 
         setPill("Here is your update, " + staff.name.split(" ")[0], "Resetting shortly...");
 
-        const sentence = "Hello " + staff.name + ". Your status is " + staff.status +
-            ". You have " + staff.leaves + " leaves remaining. Your next off day is " + staff.nextoff + ".";
-        speak(sentence);
+        const cfg = langCfg || LANGUAGES[0];
+        const sentence = cfg.reply(staff.name, staff.status, staff.leaves, staff.nextoff);
+        speak(sentence, cfg.code);
 
         clearTimeout(resetTimer);
         resetTimer = setTimeout(resetToIdle, 8000);
@@ -460,65 +497,53 @@ KIOSK_HTML = r"""
         bgVideo.volume = IDLE_VIDEO_VOLUME;
         resultCard.classList.remove("show");
         setPill("I am your PXT AI Assistant", "Say \"Hi PXT\" to start...");
+        stopNameCapture();
+        try { wakeRecognition.start(); } catch (e) { /* already running */ }
     }
 
-    function handleTranscript(transcript) {
-        const t = normalize(transcript);
-        if (state === "idle") {
-            if (isWakeWord(t)) {
-                state = "awaiting_id";
-                bgVideo.volume = LISTENING_VIDEO_VOLUME;
-                setPill("Kindly tell me your login or name", "Listening...");
-                speak("Kindly tell me your login or name.");
-            }
-        } else if (state === "awaiting_id") {
-            const staff = findStaff(transcript);
-            if (staff) {
-                showResult(staff);
-            } else {
-                setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
-                speak("Sorry, I could not find your record. Please try again.");
-                clearTimeout(resetTimer);
-                resetTimer = setTimeout(resetToIdle, 2500);
-            }
-        }
-        // while in "result" state, incoming speech is ignored until reset.
+    // ---- Wake-word listener (always English, always on while idle) -------
+    let wakeRecognition = null;
+    let shouldRun = true;
+    let resetTimer = null;
+    let lastResultAt = Date.now();
+    let watchdog = null;
+
+    function isWakeWord(t) {
+        const hasGreeting = /\b(hi|high|hey|hai)\b/.test(t);
+        const hasPX = /\bp\s?x\s?[a-z]{0,3}\b/.test(t) || t.replace(/\s+/g, "").includes("px");
+        return hasGreeting && hasPX;
     }
 
-    function initRecognition() {
+    function initWakeRecognition() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             setPill("Voice not supported", "Please use Chrome or Edge browser");
             return;
         }
-        startSpeechRecognition(SpeechRecognition);
-    }
+        wakeRecognition = new SpeechRecognition();
+        wakeRecognition.continuous = true;
+        wakeRecognition.interimResults = true;
+        wakeRecognition.lang = WAKE_LANG;
+        wakeRecognition.maxAlternatives = 1;
 
-    function startSpeechRecognition(SpeechRecognition) {
-        recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = "en-US";
-        recognition.maxAlternatives = 1;
-
-        recognition.onstart = function () {
+        wakeRecognition.onstart = function () {
             micDot.classList.add("on");
             if (state === "idle") debugCaption.textContent = "Listening... say \"Hi PXT\"";
         };
-        recognition.onend = function () {
+        wakeRecognition.onend = function () {
             micDot.classList.remove("on");
-            if (shouldRun) {
+            if (shouldRun && state === "idle") {
                 setTimeout(function () {
-                    try { recognition.start(); } catch (e) { /* already started */ }
+                    try { wakeRecognition.start(); } catch (e) { /* already started */ }
                 }, 250);
             }
         };
-        recognition.onerror = function (e) {
-            // no-speech / audio-capture / network errors are recoverable — just let onend restart it.
+        wakeRecognition.onerror = function (e) {
             micDot.classList.remove("on");
-            debugCaption.textContent = "mic error: " + e.error;
+            if (state === "idle") debugCaption.textContent = "mic error: " + e.error;
         };
-        recognition.onresult = function (event) {
+        wakeRecognition.onresult = function (event) {
+            if (state !== "idle") return;
             lastResultAt = Date.now();
             let liveText = "";
             for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -527,23 +552,92 @@ KIOSK_HTML = r"""
             debugCaption.textContent = "Heard: " + liveText;
 
             const last = event.results[event.results.length - 1];
-            if (last.isFinal) {
-                const transcript = last[0].transcript;
-                handleTranscript(transcript);
+            if (last.isFinal && isWakeWord(normalize(last[0].transcript))) {
+                try { wakeRecognition.stop(); } catch (e) {}
+                startNameCapture();
             }
         };
 
-        try { recognition.start(); } catch (e) { /* ignore */ }
+        try { wakeRecognition.start(); } catch (e) { /* ignore */ }
 
         clearInterval(watchdog);
         watchdog = setInterval(function () {
             if (state === "idle" && Date.now() - lastResultAt > 12000) {
                 debugCaption.textContent = "No audio detected — restarting mic...";
-                try { recognition.stop(); } catch (e) {}
-                try { recognition.abort(); } catch (e) {}
+                try { wakeRecognition.stop(); } catch (e) {}
+                try { wakeRecognition.abort(); } catch (e) {}
                 lastResultAt = Date.now();
             }
         }, 4000);
+    }
+
+    // ---- Name/login capture: cycles through LANGUAGES until a match -------
+    function startNameCapture() {
+        state = "awaiting_id";
+        langIndex = 0;
+        bgVideo.volume = LISTENING_VIDEO_VOLUME;
+        const first = LANGUAGES[0];
+        setPill("Kindly tell me your login or name", "Listening...");
+        speak(first.prompt, first.code, function () {
+            nameCycleDeadline = Date.now() + LANGUAGES.length * 4000;
+            tryNameLanguage(0);
+        });
+    }
+
+    function stopNameCapture() {
+        clearTimeout(nameCycleTimer);
+        if (nameRecognition) { try { nameRecognition.stop(); } catch (e) {} try { nameRecognition.abort(); } catch (e) {} }
+    }
+
+    function tryNameLanguage(idx) {
+        if (state !== "awaiting_id") return;
+        if (Date.now() > nameCycleDeadline) {
+            setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
+            speak(LANGUAGES[0].sorry, LANGUAGES[0].code);
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(resetToIdle, 2500);
+            return;
+        }
+
+        langIndex = idx % LANGUAGES.length;
+        const cfg = LANGUAGES[langIndex];
+        debugCaption.textContent = "Listening (" + cfg.label + ")...";
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        nameRecognition = new SpeechRecognition();
+        nameRecognition.continuous = false;
+        nameRecognition.interimResults = true;
+        nameRecognition.lang = cfg.code;
+        nameRecognition.maxAlternatives = 1;
+
+        let gotFinal = false;
+
+        nameRecognition.onresult = function (event) {
+            let liveText = "";
+            for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
+            debugCaption.textContent = "Heard (" + cfg.label + "): " + liveText;
+
+            const last = event.results[event.results.length - 1];
+            if (last.isFinal) {
+                gotFinal = true;
+                const staff = findStaff(last[0].transcript);
+                if (staff) {
+                    showResult(staff, cfg);
+                } else {
+                    nameCycleTimer = setTimeout(function () { tryNameLanguage(langIndex + 1); }, 200);
+                }
+            }
+        };
+        nameRecognition.onerror = function () { /* handled by onend */ };
+        nameRecognition.onend = function () {
+            if (state === "awaiting_id" && !gotFinal) {
+                nameCycleTimer = setTimeout(function () { tryNameLanguage(langIndex + 1); }, 150);
+            }
+        };
+
+        try { nameRecognition.start(); } catch (e) {
+            nameCycleTimer = setTimeout(function () { tryNameLanguage(langIndex + 1); }, 300);
+        }
     }
 
     // Kiosk mode: everything starts automatically on load — video plays with sound
@@ -553,8 +647,6 @@ KIOSK_HTML = r"""
     window.addEventListener("load", function () {
         bgVideo.muted = false;
         bgVideo.play().catch(function () {
-            // Autoplay-with-sound was blocked by the browser. Fall back to muted
-            // playback so the video still runs, and keep retrying unmute shortly.
             bgVideo.muted = true;
             bgVideo.play().catch(function () {});
             const retryUnmute = setInterval(function () {
@@ -562,7 +654,7 @@ KIOSK_HTML = r"""
                 bgVideo.play().then(function () { clearInterval(retryUnmute); }).catch(function () {});
             }, 3000);
         });
-        setTimeout(initRecognition, 300);
+        setTimeout(initWakeRecognition, 300);
         try {
             const warm = new SpeechSynthesisUtterance(' ');
             warm.volume = 0;
@@ -572,7 +664,8 @@ KIOSK_HTML = r"""
 
     window.addEventListener("beforeunload", function () {
         shouldRun = false;
-        if (recognition) { try { recognition.stop(); } catch (e) {} }
+        stopNameCapture();
+        if (wakeRecognition) { try { wakeRecognition.stop(); } catch (e) {} }
     });
 })();
 </script>
