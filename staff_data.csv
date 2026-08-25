@@ -1,0 +1,5 @@
+login_id,name,language,leaves_remaining,off_days,status
+EMP001,Ahmed Ali,Arabic,4,Friday,Present
+EMP002,John Doe,English,2,Saturday,Absent
+EMP003,Priya Sharma,Hindi,5,Sunday,Present
+EMP004,Kintu Moses,Ugandan,3,Sunday,Present
