@@ -357,13 +357,15 @@ KIOSK_HTML = r"""
         });
     }
 
-    const WAKE_WORDS = [
-        "hi pxt", "hey pxt", "hi p x t", "hey p x t", "hi pixt", "hey pixt",
-        "hi packed", "hi pxth", "hi pixie", "hi pxt hub", "hey pxt hub",
-        "hi pecked", "hi picked", "hi pact", "hi packt", "hi paxt",
-        "hi pekst", "hi pixt hub", "hi pex", "hey pex", "hi pixty",
-        "hi pixty t", "hi p60", "hi picture", "hi pks t", "hi bxt", "hey bxt"
-    ];
+    // Exact-phrase matching was too brittle — the recognizer reliably hears
+    // "hi"/"high"/"hey" and the "px" sound, but the trailing consonant of "PXT"
+    // is unreliable (often heard as "pxd", "pxt", "pect", etc). So we match
+    // loosely: a greeting word, plus something that sounds like "px".
+    function isWakeWord(t) {
+        const hasGreeting = /\b(hi|high|hey|hai|hey)\b/.test(t);
+        const hasPX = /\bp\s?x\s?[a-z]{0,3}\b/.test(t) || t.replace(/\s+/g, "").includes("px");
+        return hasGreeting && hasPX;
+    }
 
     let state = "idle"; // idle | awaiting_id | result
     let recognition = null;
@@ -454,7 +456,7 @@ KIOSK_HTML = r"""
     function handleTranscript(transcript) {
         const t = normalize(transcript);
         if (state === "idle") {
-            if (WAKE_WORDS.some(w => t.includes(w))) {
+            if (isWakeWord(t)) {
                 state = "awaiting_id";
                 setPill("Kindly tell me your login or name", "Listening...");
                 speak("Kindly tell me your login or name.");
