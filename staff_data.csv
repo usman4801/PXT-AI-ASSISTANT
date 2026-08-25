@@ -1,16 +1,19 @@
-EmployeeID,Name,Status,RemainingLeaves,NextOffDay
-EMP001,Ahmed Ali,Present,12,Friday
-EMP002,Sarah Khan,Absent,8,Saturday
-EMP003,John Mathews,Present,15,Sunday
-EMP004,Fatima Noor,Present,5,Friday
-EMP005,Michael Chen,On Leave,2,Monday
-EMP006,Priya Sharma,Present,18,Saturday
-EMP007,Youssef Ibrahim,Present,10,Friday
-EMP008,Emma Wilson,Absent,7,Sunday
-EMP009,Hassan Raza,Present,14,Friday
-EMP010,Linda Torres,Present,9,Saturday
-EMP011,Usman,Present,20,Friday
-EMP012,Zia,Absent,3,Saturday
-EMP013,Nafees,Week Off,11,Sunday
-EMP014,Nithin,On Leave,0,Monday
-EMP015,Anirudh,Planned Leave,6,Friday
+EmployeeID,Name,Status,RemainingLeaves,NextOffDay,Aliases
+EMP001,Ahmed Ali,Present,12,Friday,
+EMP002,Sarah Khan,Absent,8,Saturday,
+EMP003,John Mathews,Present,15,Sunday,
+EMP004,Fatima Noor,Present,5,Friday,فاطمہ نور
+EMP005,Michael Chen,On Leave,2,Monday,
+EMP006,Priya Sharma,Present,18,Saturday,प्रिया शर्मा
+EMP007,Youssef Ibrahim,Present,10,Friday,يوسف إبراهيم
+EMP008,Emma Wilson,Absent,7,Sunday,
+EMP009,Hassan Raza,Present,14,Friday,حسن رضا
+EMP010,Linda Torres,Present,9,Saturday,
+EMP011,Usman,Present,20,Friday,عثمان|उस्मान
+EMP012,Zia,Absent,3,Saturday,ضیاء|ज़िया
+EMP013,Nafees,Week Off,11,Sunday,نفیس|नफ़ीस
+EMP014,Nithin,On Leave,0,Monday,नितिन
+EMP015,Anirudh,Planned Leave,6,Friday,अनिरुद्ध
+EMP016,Kwame Mensah,Present,8,Saturday,Kwame|Mensah
+EMP017,Abebe Bekele,Present,10,Sunday,አበበ በቀለ|Abebe
+EMP018,Fatima Al-Sayed,Absent,4,Friday,فاطمة السيد
