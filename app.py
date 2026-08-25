@@ -174,7 +174,7 @@ KIOSK_HTML = r"""
         width: 100%; height: 100%;
         object-fit: cover;
         z-index: 0;
-        opacity: 0.55;
+        opacity: 0.85;
     }
     .bg-fallback {
         position: absolute; inset: 0;
@@ -215,24 +215,7 @@ KIOSK_HTML = r"""
         text-transform: uppercase;
     }
 
-    .orb {
-        position: relative; z-index: 2;
-        width: 150px; height: 150px;
-        border-radius: 50%;
-        background: radial-gradient(circle at 35% 30%, #24e0ff, #0072ff 60%, #001b3d 100%);
-        box-shadow: 0 0 40px rgba(0,190,255,0.55), 0 0 90px rgba(0,140,255,0.35);
-        display: flex; align-items: center; justify-content: center;
-        transition: box-shadow .3s ease, transform .3s ease;
-        margin-bottom: 34px;
-    }
-    .orb.listening { animation: pulse 1.6s ease-in-out infinite; }
-    .orb.active { box-shadow: 0 0 60px rgba(60,255,190,0.75), 0 0 120px rgba(60,255,190,0.4); }
-    @keyframes pulse {
-        0%   { transform: scale(1);    box-shadow: 0 0 40px rgba(0,190,255,0.5), 0 0 90px rgba(0,140,255,0.3); }
-        50%  { transform: scale(1.06); box-shadow: 0 0 60px rgba(0,190,255,0.8), 0 0 130px rgba(0,140,255,0.5); }
-        100% { transform: scale(1);    box-shadow: 0 0 40px rgba(0,190,255,0.5), 0 0 90px rgba(0,140,255,0.3); }
-    }
-    .orb svg { width: 60px; height: 60px; }
+    .spacer { height: 6vh; }
 
     .result-card {
         position: relative; z-index: 2;
@@ -303,12 +286,7 @@ KIOSK_HTML = r"""
 
     <div class="brand">PXT&nbsp;HUB</div>
 
-    <div class="orb listening" id="orb">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3z" stroke="#eafcff" stroke-width="1.6"/>
-            <path d="M19 11a7 7 0 01-14 0M12 19v3" stroke="#eafcff" stroke-width="1.6" stroke-linecap="round"/>
-        </svg>
-    </div>
+    <div class="spacer"></div>
 
     <div class="result-card" id="resultCard">
         <div class="result-name" id="rName">—</div>
@@ -340,7 +318,6 @@ KIOSK_HTML = r"""
     const STAFF = __STAFF_DATA_JSON__;
     const VIDEO_SRC = "__VIDEO_SRC__"; // optional: set a URL/path to a looping mp4 for a richer background
 
-    const orb = document.getElementById('orb');
     const micDot = document.getElementById('micDot');
     const pillLine1 = document.getElementById('pillLine1');
     const pillLine2 = document.getElementById('pillLine2');
@@ -355,6 +332,10 @@ KIOSK_HTML = r"""
     if (VIDEO_SRC && VIDEO_SRC.trim() !== "") {
         bgVideo.src = VIDEO_SRC;
         bgVideo.style.display = "block";
+        const fallback = document.querySelector('.bg-fallback');
+        bgVideo.addEventListener('playing', function () {
+            if (fallback) fallback.style.display = "none";
+        });
     }
 
     const WAKE_WORDS = ["hi pxt", "hey pxt", "hi p x t", "hey p x t", "hi pixt", "hi packed", "hi pxth", "hi pixie"];
@@ -419,8 +400,6 @@ KIOSK_HTML = r"""
 
     function showResult(staff) {
         state = "result";
-        orb.classList.remove("listening");
-        orb.classList.add("active");
         resultCard.classList.add("show");
         rName.textContent = staff.name;
         rId.textContent = staff.id;
@@ -441,8 +420,6 @@ KIOSK_HTML = r"""
 
     function resetToIdle() {
         state = "idle";
-        orb.classList.remove("active");
-        orb.classList.add("listening");
         resultCard.classList.remove("show");
         setPill("I am your PXT AI Assistant", "Say \"Hi PXT\" to start...");
     }
@@ -521,6 +498,7 @@ KIOSK_HTML = r"""
 """
 
 KIOSK_HTML = KIOSK_HTML.replace("__STAFF_DATA_JSON__", staff_json)
-KIOSK_HTML = KIOSK_HTML.replace("__VIDEO_SRC__", "")  # set a URL to an mp4 here for a real video banner
+VIDEO_URL = "https://raw.githubusercontent.com/usman4801/PXT-AI-ASSISTANT/main/banner.mp4"
+KIOSK_HTML = KIOSK_HTML.replace("__VIDEO_SRC__", VIDEO_URL)
 
 st.components.v1.html(KIOSK_HTML, height=1000, scrolling=False)
