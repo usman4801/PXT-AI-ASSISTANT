@@ -348,6 +348,14 @@ KIOSK_HTML = r"""
     const bgVideo = document.getElementById('bgVideo');
     const debugCaption = document.getElementById('debugCaption');
 
+    // The video plays through the kiosk speakers and bleeds back into the mic,
+    // which corrupts wake-word / name recognition. Keeping volume moderate (not
+    // full blast) is the single biggest fix for that — it's an acoustic problem,
+    // not something code alone can fully cancel. Adjust this if needed.
+    const IDLE_VIDEO_VOLUME = 0.35;      // while waiting for "Hi PXT"
+    const LISTENING_VIDEO_VOLUME = 0.12; // ducked further while capturing name/login
+    bgVideo.volume = IDLE_VIDEO_VOLUME;
+
     if (VIDEO_SRC && VIDEO_SRC.trim() !== "") {
         bgVideo.src = VIDEO_SRC;
         bgVideo.style.display = "block";
@@ -449,6 +457,7 @@ KIOSK_HTML = r"""
 
     function resetToIdle() {
         state = "idle";
+        bgVideo.volume = IDLE_VIDEO_VOLUME;
         resultCard.classList.remove("show");
         setPill("I am your PXT AI Assistant", "Say \"Hi PXT\" to start...");
     }
@@ -458,6 +467,7 @@ KIOSK_HTML = r"""
         if (state === "idle") {
             if (isWakeWord(t)) {
                 state = "awaiting_id";
+                bgVideo.volume = LISTENING_VIDEO_VOLUME;
                 setPill("Kindly tell me your login or name", "Listening...");
                 speak("Kindly tell me your login or name.");
             }
@@ -466,8 +476,10 @@ KIOSK_HTML = r"""
             if (staff) {
                 showResult(staff);
             } else {
-                setPill("Sorry, I couldn't find that record", "Please say your name or login again");
+                setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
                 speak("Sorry, I could not find your record. Please try again.");
+                clearTimeout(resetTimer);
+                resetTimer = setTimeout(resetToIdle, 2500);
             }
         }
         // while in "result" state, incoming speech is ignored until reset.
