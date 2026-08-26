@@ -381,29 +381,48 @@ KIOSK_HTML = r"""
     // the employee's name/login, a few seconds each, until one of them matches.
     // Add/remove/reorder languages here as needed.
     const LANGUAGES = [
-        { code: "en-US", label: "English",  prompt: "Kindly tell me your login or name.",
+        { code: "en-US", label: "English",   prompt: "Kindly tell me your login or name.",
           reply: (n,s,l,d) => `Hello ${n}. Your status is ${s}. You have ${l} leaves remaining. Your next off day is ${d}.`,
           sorry: "Sorry, I could not find your record. Please try again." },
-        { code: "ur-PK", label: "Urdu",     prompt: "براہ مہربانی اپنا نام یا لاگ ان بتائیں۔",
+        { code: "ur-PK", label: "Urdu",      prompt: "براہ مہربانی اپنا نام یا لاگ ان بتائیں۔",
           reply: (n,s,l,d) => `السلام علیکم ${n}۔ آپ کی حاضری کی صورتحال ${s} ہے۔ آپ کی ${l} چھٹیاں باقی ہیں۔ آپ کی اگلی چھٹی کا دن ${d} ہے۔`,
           sorry: "معذرت، آپ کا ریکارڈ نہیں ملا۔ دوبارہ کوشش کریں۔" },
-        { code: "hi-IN", label: "Hindi",    prompt: "कृपया अपना नाम या लॉगिन बताएं।",
+        { code: "hi-IN", label: "Hindi",     prompt: "कृपया अपना नाम या लॉगिन बताएं।",
           reply: (n,s,l,d) => `नमस्ते ${n}। आपकी स्थिति ${s} है। आपकी ${l} छुट्टियाँ शेष हैं। आपका अगला अवकाश दिन ${d} है।`,
           sorry: "क्षमा करें, आपका रिकॉर्ड नहीं मिला। कृपया पुनः प्रयास करें।" },
-        { code: "ar-SA", label: "Arabic",   prompt: "من فضلك أخبرني باسمك أو رقم الدخول.",
-          reply: (n,s,l,d) => `مرحباً ${n}. حالتك هي ${s}. لديك ${l} إجازة متبقية. يوم إجازتك القادم هو ${d}.`,
-          sorry: "عذراً، لم يتم العثور على سجلك. حاول مرة أخرى." },
-        { code: "am-ET", label: "Amharic",  prompt: "እባክዎ ስምዎን ወይም መግቢያዎን ይንገሩኝ።",
+        { code: "ta-IN", label: "Tamil",     prompt: "தயவுசெய்து உங்கள் பெயர் அல்லது லாகின் சொல்லுங்கள்.",
+          reply: (n,s,l,d) => `வணக்கம் ${n}. உங்கள் நிலை ${s}. உங்களுக்கு ${l} விடுப்பு மீதம் உள்ளது. உங்கள் அடுத்த ஓய்வு நாள் ${d}.`,
+          sorry: "மன்னிக்கவும், உங்கள் பதிவு கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்." },
+        { code: "ml-IN", label: "Malayalam", prompt: "ദയവായി നിങ്ങളുടെ പേര് അല്ലെങ്കിൽ ലോഗിൻ പറയൂ.",
+          reply: (n,s,l,d) => `ഹലോ ${n}. നിങ്ങളുടെ സ്ഥിതി ${s} ആണ്. നിങ്ങൾക്ക് ${l} അവധി ദിനങ്ങൾ ബാക്കിയുണ്ട്. നിങ്ങളുടെ അടുത്ത അവധി ദിവസം ${d} ആണ്.`,
+          sorry: "ക്ഷമിക്കണം, നിങ്ങളുടെ റെക്കോർഡ് കണ്ടെത്താനായില്ല. വീണ്ടും ശ്രമിക്കുക." },
+        { code: "am-ET", label: "Amharic",   prompt: "እባክዎ ስምዎን ወይም መግቢያዎን ይንገሩኝ።",
           reply: (n,s,l,d) => `ሰላም ${n}። ሁኔታዎ ${s} ነው። ${l} ቀሪ የእረፍት ቀናት አሉዎት። ቀጣዩ የእረፍት ቀንዎ ${d} ነው።`,
           sorry: "ይቅርታ፣ መዝገብዎ አልተገኘም። እባክዎ ደግመው ይሞክሩ።" },
-        { code: "sw-KE", label: "Swahili",  prompt: "Tafadhali niambie jina lako au namba yako ya kuingia.",
-          reply: (n,s,l,d) => `Habari ${n}. Hali yako ni ${s}. Una likizo ${l} zilizobaki. Siku yako ijayo ya mapumziko ni ${d}.`,
-          sorry: "Samahani, sikuweza kupata rekodi yako. Tafadhali jaribu tena." }
+        { code: "yo-NG", label: "Yoruba",    prompt: "Jọwọ sọ orukọ tabi login rẹ fun mi.",
+          reply: (n,s,l,d) => `Bawo ni ${n}. Ipo rẹ ni ${s}. O ni ọjọ isinmi ${l} to ku. Ọjọ isinmi rẹ to nbọ ni ${d}.`,
+          sorry: "Ma binu, mi ò rí àkọsílẹ̀ rẹ. Jọwọ tún gbìyànjú." },
+        { code: "ha-NG", label: "Hausa",     prompt: "Don Allah gaya mini sunanka ko shiga.",
+          reply: (n,s,l,d) => `Sannu ${n}. Matsayin ku shine ${s}. Kuna da hutu ${l} da suka rage. Ranar hutunku ta gaba shine ${d}.`,
+          sorry: "Yi hakuri, ban sami bayanan ku ba. Don Allah a sake gwadawa." },
+        { code: "ig-NG", label: "Igbo",      prompt: "Biko gwa m aha gị ma ọ bụ nbanye gị.",
+          reply: (n,s,l,d) => `Ndewo ${n}. Ọnọdụ gị bụ ${s}. I nwere ezumike ${l} fọdụrụ. Ụbọchị izu ike gị na-abịa bụ ${d}.`,
+          sorry: "Ndo, achọtaghị ndekọ gị. Biko nwaa ọzọ." },
+        { code: "lg-UG", label: "Luganda",   prompt: "Nsaba mumbulire erinnya lyo oba login yo.",
+          reply: (n,s,l,d) => `Ki kati ${n}. Embeera yo eri ${s}. Olina ${l} ez'okuwummula ezisigadde. Olunaku lwo olw'okuwummula oluddako lwe ${d}.`,
+          sorry: "Nsonyiwa, sisobodde kufuna ndagiriro yo. Ddamu ogezeeko." }
     ];
-    // NOTE: Amharic/Swahili/Urdu/Hindi/Arabic phrases above are best-effort
-    // machine translations for this demo/testing build. Have a native speaker
-    // review and correct them before using this with real staff.
+    // NOTE: All non-English phrases above are best-effort machine translations
+    // for this demo/testing build. Have native speakers review and correct
+    // them before real deployment — accuracy is lowest for Yoruba, Hausa,
+    // Igbo and Luganda. Also: the browser's underlying speech engine (Google's
+    // cloud speech service in Chrome) may not actually support recognition
+    // for every one of these languages/dialects. If a language's "Heard: ..."
+    // caption never updates no matter how clearly someone speaks, that
+    // language likely isn't supported for recognition on this browser —
+    // its lang code may need to be swapped for a closer regional variant.
 
+    let state = "idle"; // idle | awaiting_id | result
     let langIndex = 0;
     let nameRecognition = null;
     let nameCycleTimer = null;
@@ -578,10 +597,20 @@ KIOSK_HTML = r"""
         bgVideo.volume = LISTENING_VIDEO_VOLUME;
         const first = LANGUAGES[0];
         setPill("Kindly tell me your login or name", "Listening...");
-        speak(first.prompt, first.code, function () {
+
+        // speechSynthesis's "onend" event is unreliable inside iframes/kiosk
+        // browsers — it can simply never fire, which used to freeze the whole
+        // kiosk (mic never restarted). We now start listening on a fixed
+        // fallback timer regardless of whether TTS reports finishing.
+        let cycleStarted = false;
+        function beginCycle() {
+            if (cycleStarted || state !== "awaiting_id") return;
+            cycleStarted = true;
             nameCycleDeadline = Date.now() + LANGUAGES.length * 4000;
             tryNameLanguage(0);
-        });
+        }
+        speak(first.prompt, first.code, beginCycle);
+        setTimeout(beginCycle, 3500); // safety net if TTS onend never fires
     }
 
     function stopNameCapture() {
