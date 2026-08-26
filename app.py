@@ -649,8 +649,14 @@ KIOSK_HTML = r"""
             const last = event.results[event.results.length - 1];
             if (last.isFinal) {
                 gotFinal = true;
+                const confidence = last[0].confidence; // 0..1, or 0/undefined if browser doesn't report it
                 const staff = findStaff(last[0].transcript);
-                if (staff) {
+                // Reject low-confidence "accidental" matches — garbled cross-language
+                // phonetic overlap (e.g. Urdu speech vaguely resembling a Latin name)
+                // tends to score low. This lets the correct-language pass win instead
+                // of an early false positive stealing the match in the wrong language.
+                const confidentEnough = !confidence || confidence >= 0.4;
+                if (staff && confidentEnough) {
                     showResult(staff, cfg);
                 } else {
                     nameCycleTimer = setTimeout(function () { tryNameLanguage(langIndex + 1); }, 200);
