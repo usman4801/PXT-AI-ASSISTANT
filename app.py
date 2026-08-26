@@ -620,14 +620,41 @@ KIOSK_HTML = r"""
     // reply is spoken back in that same matched language.
     let activeRecognizers = [];
     let nameResolved = false;
+    let nameCandidates = [];
+    let nameGraceTimer = null;
+    const MATCH_GRACE_MS = 700; // wait this long after the first match to let a more reliable language's result arrive too
 
     function stopAllNameRecognizers() {
+        clearTimeout(nameGraceTimer);
+        nameGraceTimer = null;
         activeRecognizers.forEach(function (r) {
             try { r.onresult = null; r.onend = null; r.onerror = null; } catch (e) {}
             try { r.stop(); } catch (e) {}
             try { r.abort(); } catch (e) {}
         });
         activeRecognizers = [];
+    }
+
+    // Once at least one language has matched a staff member, wait a short
+    // grace period instead of resolving instantly — this gives a reliable
+    // language's recognizer (which can be a beat slower) a chance to also
+    // report in. If a reliable-language match shows up within that window,
+    // it's used over an unreliable one, even if the unreliable one answered
+    // first.
+    function resolveBestCandidate() {
+        nameGraceTimer = null;
+        if (nameResolved || nameCandidates.length === 0) return;
+        nameResolved = true;
+        stopAllNameRecognizers();
+
+        let winner = nameCandidates.find(function (c) { return RELIABLE_LANG_CODES.includes(c.langCfg.code); });
+        if (!winner) winner = nameCandidates[0];
+
+        const trusted = RELIABLE_LANG_CODES.includes(winner.langCfg.code);
+        debugCaption.textContent = "Matched: " + winner.staff.name + " (" + winner.langCfg.label + (trusted ? "" : " — unverified, replying in English") + ")";
+
+        const replyCfg = trusted ? winner.langCfg : LANGUAGES[0];
+        showResult(winner.staff, replyCfg);
     }
 
     // Fully pause (not just duck) the background video while listening, so
@@ -664,6 +691,9 @@ KIOSK_HTML = r"""
         debugCaption.textContent = "Listening...";
 
         nameResolved = false;
+        nameCandidates = [];
+        clearTimeout(nameGraceTimer);
+        nameGraceTimer = null;
         stopAllNameRecognizers();
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -697,20 +727,17 @@ KIOSK_HTML = r"""
                 if (last.isFinal) {
                     const staff = findStaff(last[0].transcript);
                     if (staff && !nameResolved) {
-                        nameResolved = true;
-                        stopAllNameRecognizers();
-                        // Only reply in the matched language if that language's
-                        // recognition is actually trustworthy — otherwise default
-                        // the spoken reply to English (see RELIABLE_LANG_CODES).
-                        const replyCfg = RELIABLE_LANG_CODES.includes(langCfg.code) ? langCfg : LANGUAGES[0];
-                        showResult(staff, replyCfg);
+                        nameCandidates.push({ staff: staff, langCfg: langCfg });
+                        if (!nameGraceTimer) {
+                            nameGraceTimer = setTimeout(resolveBestCandidate, MATCH_GRACE_MS);
+                        }
                     }
                 }
             };
             rec.onerror = function () { /* handled by onend below */ };
             rec.onend = function () {
                 endedCount++;
-                if (!nameResolved && endedCount >= total && state === "awaiting_id") {
+                if (!nameResolved && !nameGraceTimer && endedCount >= total && state === "awaiting_id") {
                     setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
                     speak(LANGUAGES[0].sorry, "en-US");
                     clearTimeout(resetTimer);
