@@ -2,18 +2,6 @@
 PXT Hub — AI Voice Kiosk
 =========================
 A full-screen, browser-mic-based voice kiosk built with Streamlit.
-
-IMPORTANT DEPLOYMENT NOTE:
-Browser speech recognition (Web Speech API) only works over HTTPS or on
-localhost. Streamlit Community Cloud serves over HTTPS by default, so
-deployment there works out of the box. If you run this on a local
-network kiosk laptop without HTTPS, use `localhost` (not a LAN IP) or
-set up a local TLS certificate, otherwise Chrome will silently block
-the microphone.
-
-Supported/tested browser: Google Chrome or Microsoft Edge (both use the
-webkitSpeechRecognition engine). Firefox/Safari do not support the
-wake-word style continuous recognition used here.
 """
 
 import json
@@ -92,7 +80,6 @@ st.markdown(
         [data-testid="stSidebar"] {
             background: #0a0d14;
         }
-        /* Make the kiosk iframe cover the full viewport */
         iframe[title="st.iframe"], [data-testid="stIFrame"] iframe, iframe {
             position: fixed !important;
             top: 0; left: 0;
@@ -107,7 +94,7 @@ st.markdown(
 )
 
 # --------------------------------------------------------------------------
-# ADMIN PANEL (discreet — collapsed sidebar, password protected)
+# ADMIN PANEL
 # --------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 🔒 PXT Admin")
@@ -136,9 +123,6 @@ with st.sidebar:
     elif pwd:
         st.error("Incorrect password")
 
-# --------------------------------------------------------------------------
-# LOAD DATA
-# --------------------------------------------------------------------------
 staff_df = load_staff_data()
 staff_json = df_to_json_records(staff_df)
 
@@ -158,7 +142,6 @@ KIOSK_HTML = r"""
         font-family: 'Segoe UI', Arial, sans-serif;
         overflow: hidden;
     }
-
     .kiosk-wrap {
         position: relative;
         width: 100vw; height: 100vh;
@@ -168,7 +151,6 @@ KIOSK_HTML = r"""
         align-items: center;
         justify-content: center;
     }
-
     .bg-video {
         position: absolute; inset: 0;
         width: 100%; height: 100%;
@@ -203,7 +185,6 @@ KIOSK_HTML = r"""
         position: absolute; inset: 0; z-index: 1;
         background: radial-gradient(circle at 50% 45%, rgba(5,7,12,0.15), rgba(5,7,12,0.85) 75%);
     }
-
     .brand {
         position: relative; z-index: 2;
         color: #e8f6ff;
@@ -214,9 +195,7 @@ KIOSK_HTML = r"""
         margin-bottom: 26px;
         text-transform: uppercase;
     }
-
     .spacer { height: 6vh; }
-
     .result-card {
         position: relative; z-index: 2;
         width: min(560px, 88vw);
@@ -241,7 +220,6 @@ KIOSK_HTML = r"""
     .status-present { color: #4dffb0; }
     .status-absent  { color: #ff6767; }
     .status-other   { color: #ffd166; }
-
     .pill {
         position: fixed;
         bottom: 46px; left: 50%;
@@ -265,7 +243,6 @@ KIOSK_HTML = r"""
     }
     .pill .line1 { color: #dff5ff; font-size: 15px; font-weight: 600; letter-spacing: 0.4px; }
     .pill .line2 { color: #7fd0ef; font-size: 12.5px; letter-spacing: 0.3px; opacity: 0.85; }
-
     .mic-dot {
         position: fixed; top: 22px; right: 26px; z-index: 3;
         width: 10px; height: 10px; border-radius: 50%;
@@ -273,7 +250,6 @@ KIOSK_HTML = r"""
         box-shadow: 0 0 10px rgba(255,80,80,0.8);
     }
     .mic-dot.on { background: #46ffb0; box-shadow: 0 0 10px rgba(70,255,176,0.9); }
-
     .debug-caption {
         position: fixed;
         top: 22px; left: 50%; transform: translateX(-50%);
@@ -303,7 +279,6 @@ KIOSK_HTML = r"""
     <div class="debug-caption" id="debugCaption">&nbsp;</div>
 
     <div class="brand">PXT&nbspHUB</div>
-
     <div class="spacer"></div>
 
     <div class="result-card" id="resultCard">
@@ -363,22 +338,22 @@ KIOSK_HTML = r"""
 
     const WAKE_LANG = "en-US";
 
-    // All supported languages configuration dictionary
-    const LANGUAGES = {
-        "en": { code: "en-US", label: "English", reply: (n,s,l,d) => `Hello ${n}. Your status is ${s}. You have ${l} leaves remaining. Your next off day is ${d}.`, sorry: "Sorry, I could not find your record. Please try again." },
-        "ur": { code: "ur-PK", label: "Urdu", reply: (n,s,l,d) => `السلام علیکم ${n}۔ آپ کی حاضری کی صورتحال ${s} ہے۔ آپ کی ${l} چھٹیاں باقی ہیں۔ آپ کی اگلی چھٹی کا دن ${d} ہے۔`, sorry: "معذرت، آپ کا ریکارڈ نہیں ملا۔ دوبارہ کوشش کریں۔" },
-        "hi": { code: "hi-IN", label: "Hindi", reply: (n,s,l,d) => `नमस्ते ${n}। आपकी स्थिति ${s} है। आपकी ${l} छुट्टियाँ शेष हैं। आपका अगला अवकाश दिन ${d} है।`, sorry: "क्षमा करें, आपका रिकॉर्ड नहीं मिला। कृपया पुनः प्रयास करें।" },
-        "ta": { code: "ta-IN", label: "Tamil", reply: (n,s,l,d) => `வணக்கம் ${n}. உங்கள் நிலை ${s}. உங்களுக்கு ${l} விடுப்பு மீதம் உள்ளது. உங்கள் அடுத்த ஓய்வு நாள் ${d}.`, sorry: "மன்னிக்கவும், உங்கள் பதிவு கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்." },
-        "ml": { code: "ml-IN", label: "Malayalam", reply: (n,s,l,d) => `ഹലോ ${n}. നിങ്ങളുടെ സ്ഥിതി ${s} ആണ്. നിങ്ങൾക്ക് ${l} അവധി ദിനങ്ങൾ ബാക്കിയുണ്ട്. നിങ്ങളുടെ അടുത്ത അവധി ദിവസം ${d} ആണ്.`, sorry: "ക്ഷമിക്കണം, നിങ്ങളുടെ റെക്കോർഡ് കണ്ടെത്താനായില്ല. വീണ്ടും ശ്രമിക്കുക." },
-        "am": { code: "am-ET", label: "Amharic", reply: (n,s,l,d) => `ሰላም ${n}። ሁኔታዎ ${s} ነው። ${l} ቀሪ የእረፍት ቀናት አሉዎት። ቀጣዩ የእረፍት ቀንዎ ${d} ነው።`, sorry: "ይቅርታ፣ መዝገብዎ አልተገኘም። እባክዎ ደግመው ይሞክሩ።" },
-        "yo": { code: "yo-NG", label: "Yoruba", reply: (n,s,l,d) => `Bawo ni ${n}. Ipo rẹ ni ${s}. O ni ọjọ isinmi ${l} to ku. Ọjọ isinmi rẹ to nbọ ni ${d}.`, sorry: "Ma binu, mi ò rí àkọsílẹ̀ rẹ. Jọwọ tún gbìyànjú." },
-        "ha": { code: "ha-NG", label: "Hausa", reply: (n,s,l,d) => `Sannu ${n}. Matsayin ku shine ${s}. Kuna da hutu ${l} da suka rage. Ranar hutunku ta gaba shine ${d}.`, sorry: "Yi hakuri, ban sami bayanan ku ba. Don Allah a sake gwadawa." },
-        "ig": { code: "ig-NG", label: "Igbo", reply: (n,s,l,d) => `Ndewo ${n}. Ọnọdụ gị bụ ${s}. I nwere ezumike ${l} fọdụrụ. Ụbọchị izu ike gị na-abịa bụ ${d}.`, sorry: "Ndo, achọtaghị ndekọ gị. Biko nwaa ọzọ." },
-        "lg": { code: "lg-UG", label: "Luganda", reply: (n,s,l,d) => `Ki kati ${n}. Embeera yo eri ${s}. Olina ${l} ez'okuwummula ezisigadde. Olunaku lwo olw'okuwummula oluddako lwe ${d}.`, sorry: "Nsonyiwa, sisobodde kufuna ndagiriro yo. Ddamu ogezeeko." }
-    };
+    // Supported languages dictionary
+    const LANGUAGES = [
+        { code: "en-US", label: "English", keywords: ["english"], prompt: "Kindly tell me your login or name.", reply: (n,s,l,d) => `Hello ${n}. Your status is ${s}. You have ${l} leaves remaining. Your next off day is ${d}.`, sorry: "Sorry, I could not find your record. Please try again." },
+        { code: "ur-PK", label: "Urdu", keywords: ["urdu", "ordou"], prompt: "براہ مہربانی اپنا نام یا لاگ ان بتائیں۔", reply: (n,s,l,d) => `السلام علیکم ${n}۔ آپ کی حاضری کی صورتحال ${s} ہے۔ آپ کی ${l} چھٹیاں باقی ہیں۔ آپ کی اگلی چھٹی کا دن ${d} ہے۔`, sorry: "معذرت، آپ کا ریکارڈ نہیں ملا۔ دوبارہ کوشش کریں۔" },
+        { code: "hi-IN", label: "Hindi", keywords: ["hindi", "hindee"], prompt: "कृपया अपना नाम या लॉगिन बताएं।", reply: (n,s,l,d) => `नमस्ते ${n}। आपकी स्थिति ${s} है। आपकी ${l} छुट्टियाँ शेष हैं। आपका अगला अवकाश दिन ${d} है।`, sorry: "क्षमा करें, आपका रिकॉर्ड नहीं मिला। कृपया पुनः प्रयास करें।" },
+        { code: "ta-IN", label: "Tamil", keywords: ["tamil"], prompt: "தயவுசெய்து உங்கள் பெயர் அல்லது லாகின் சொல்லுங்கள்.", reply: (n,s,l,d) => `வணக்கம் ${n}. உங்கள் நிலை ${s}. உங்களுக்கு ${l} விடுப்பு மீதம் உள்ளது. உங்கள் அடுத்த ஓய்வு நாள் ${d}.`, sorry: "மன்னிக்கவும், உங்கள் பதிவு கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்." },
+        { code: "ml-IN", label: "Malayalam", keywords: ["malayalam", "malayali"], prompt: "ദയവായി നിങ്ങളുടെ പേര് അല്ലെങ്കിൽ ലോഗിൻ പറയൂ.", reply: (n,s,l,d) => `ഹലോ ${n}. നിങ്ങളുടെ സ്ഥിതി ${s} ആണ്. നിങ്ങൾക്ക് ${l} അവധി ദിനങ്ങൾ ബാക്കിയുണ്ട്. നിങ്ങളുടെ അടുത്ത അവധി ദിവസം ${d} ആണ്.`, sorry: "ക്ഷമിക്കണം, നിങ്ങളുടെ റെക്കോർഡ് കണ്ടെത്താനായില്ല. വീണ്ടും ശ്രമിക്കുക." },
+        { code: "am-ET", label: "Amharic", keywords: ["amharic", "ethiopian"], prompt: "እባክዎ ስምዎን ወይም መግቢያዎን ይንገሩኝ።", reply: (n,s,l,d) => `ሰላም ${n}። ሁኔታዎ ${s} ነው። ${l} ቀሪ የእረፍት ቀናት አሉዎት። ቀጣዩ የእረፍት ቀንዎ ${d} ነው።`, sorry: "ይቅርታ፣ መዝገብዎ አልተገኘም። እባክዎ ደግመው ይሞክሩ።" },
+        { code: "yo-NG", label: "Yoruba", keywords: ["yoruba"], prompt: "Jọwọ sọ orukọ tabi login rẹ fun mi.", reply: (n,s,l,d) => `Bawo ni ${n}. Ipo rẹ ni ${s}. O ni ọjọ isinmi ${l} to ku. Ọjọ isinmi rẹ to nbọ ni ${d}.`, sorry: "Ma binu, mi ò rí àkọsílẹ̀ rẹ. Jọwọ tún gbìyànjú." },
+        { code: "ha-NG", label: "Hausa", keywords: ["hausa"], prompt: "Don Allah gaya mini sunanka ko shiga.", reply: (n,s,l,d) => `Sannu ${n}. Matsayin ku shine ${s}. Kuna da hutu ${l} da suka rage. Ranar hutunku ta gaba shine ${d}.`, sorry: "Yi hakuri, ban sami bayanan ku ba. Don Allah a sake gwadawa." },
+        { code: "ig-NG", label: "Igbo", keywords: ["igbo"], prompt: "Biko gwa m aha gị ma ọ bụ nbanye gị.", reply: (n,s,l,d) => `Ndewo ${n}. Ọnọdụ gị bụ ${s}. I nwere ezumike ${l} fọdụrụ. Ụbọchị izu ike gị na-abịa bụ ${d}.`, sorry: "Ndo, achọtaghị ndekọ gị. Biko nwaa ọzọ." },
+        { code: "lg-UG", label: "Luganda", keywords: ["luganda", "uganda", "ganda"], prompt: "Nsaba mumbulire erinnya lyo oba login yo.", reply: (n,s,l,d) => `Ki kati ${n}. Embeera yo eri ${s}. Olina ${l} ez'okuwummula ezisigadde. Olunaku lwo olw'okuwummula oluddako lwe ${d}.`, sorry: "Nsonyiwa, sisobodde kufuna ndagiriro yo. Ddamu ogezeeko." }
+    ];
 
-    let state = "idle";
-    let nameRecognition = null;
+    let state = "idle"; // idle | choosing_lang | awaiting_id | result
+    let activeRecognition = null;
     let resetTimer = null;
 
     function setPill(line1, line2) {
@@ -437,33 +412,6 @@ KIOSK_HTML = r"""
         return "status-other";
     }
 
-    // Intelligent Native Language / Script Detection from the spoken transcript
-    function detectLanguageFromTranscript(transcript) {
-        const t = transcript || "";
-        // Urdu / Arabic script
-        if (/[\u0600-\u06FF]/.test(t)) {
-            if (/[\u067E\u0686\u0698\u06AF]/.test(t)) return LANGUAGES["ur"];
-            return LANGUAGES["en"]; // fallback or arabic
-        }
-        // Hindi (Devanagari) script
-        if (/[\u0900-\u097F]/.test(t)) return LANGUAGES["hi"];
-        // Tamil script
-        if (/[\u0B80-\u0BFF]/.test(t)) return LANGUAGES["ta"];
-        // Malayalam script
-        if (/[\u0D00-\u0D7F]/.test(t)) return LANGUAGES["ml"];
-        // Amharic (Ethiopic) script
-        if (/[\u1200-\u137F]/.test(t)) return LANGUAGES["am"];
-
-        // Keyword or phonetics checking for Latin-script African/Asian languages if spoken or matched in aliases
-        const lower = t.toLowerCase();
-        if (lower.includes("luganda") || lower.includes("uganda")) return LANGUAGES["lg"];
-        if (lower.includes("yoruba")) return LANGUAGES["yo"];
-        if (lower.includes("hausa")) return LANGUAGES["ha"];
-        if (lower.includes("igbo")) return LANGUAGES["ig"];
-
-        return LANGUAGES["en"];
-    }
-
     function showResult(staff, langCfg) {
         state = "result";
         resultCard.classList.add("show");
@@ -476,9 +424,8 @@ KIOSK_HTML = r"""
 
         setPill("Here is your update, " + staff.name.split(" ")[0], "Resetting shortly...");
 
-        const cfg = langCfg || LANGUAGES["en"];
-        const sentence = cfg.reply(staff.name, staff.status, staff.leaves, staff.nextoff);
-        speak(sentence, cfg.code);
+        const sentence = langCfg.reply(staff.name, staff.status, staff.leaves, staff.nextoff);
+        speak(sentence, langCfg.code);
 
         clearTimeout(resetTimer);
         resetTimer = setTimeout(resetToIdle, 8000);
@@ -489,7 +436,7 @@ KIOSK_HTML = r"""
         bgVideo.volume = IDLE_VIDEO_VOLUME;
         resultCard.classList.remove("show");
         setPill("I am your PXT AI Assistant", "Say \"Hi PXT\" to start...");
-        stopNameCapture();
+        stopActiveRecognition();
         try { wakeRecognition.start(); } catch (e) {}
     }
 
@@ -544,7 +491,7 @@ KIOSK_HTML = r"""
             const last = event.results[event.results.length - 1];
             if (last.isFinal && isWakeWord(normalize(last[0].transcript))) {
                 try { wakeRecognition.stop(); } catch (e) {}
-                startNameCaptureDirect();
+                startLanguageSelection();
             }
         };
 
@@ -561,41 +508,52 @@ KIOSK_HTML = r"""
         }, 4000);
     }
 
-    function stopNameCapture() {
-        if (nameRecognition) { try { nameRecognition.stop(); } catch (e) {} try { nameRecognition.abort(); } catch (e) {} }
+    function stopActiveRecognition() {
+        if (activeRecognition) { try { activeRecognition.stop(); } catch (e) {} try { activeRecognition.abort(); } catch (e) {} }
     }
 
-    const NAME_PROMPT = "Tell me your login or name.";
+    // Step 1: Ask for language first (Deterministic flow)
+    const LANG_PROMPT_TEXT = "Please tell me your language. Say: English, Urdu, Hindi, Tamil, Malayalam, Amharic, Yoruba, Hausa, Igbo, or Luganda.";
 
-    function startNameCaptureDirect() {
-        state = "awaiting_id";
+    function startLanguageSelection() {
+        state = "choosing_lang";
         bgVideo.volume = LISTENING_VIDEO_VOLUME;
-        setPill("Tell me your login or name", "Listening...");
+        setPill("Which language would you like?", "Say: English, Urdu, Hindi, Tamil...");
 
         let started = false;
         function begin() {
-            if (started || state !== "awaiting_id") return;
+            if (started || state !== "choosing_lang") return;
             started = true;
-            listenForNameDirect();
+            listenForLanguageChoice();
         }
-        speak(NAME_PROMPT, "en-US", begin);
-        setTimeout(begin, 3500);
+        speak(LANG_PROMPT_TEXT, "en-US", begin);
+        setTimeout(begin, 4500);
     }
 
-    function listenForNameDirect() {
-        if (state !== "awaiting_id") return;
-        debugCaption.textContent = "Listening for name or login...";
+    function detectLanguageChoice(transcript) {
+        const t = normalize(transcript);
+        for (const lang of LANGUAGES) {
+            if (lang.keywords.some(kw => t.includes(kw))) {
+                return lang;
+            }
+        }
+        return null;
+    }
+
+    function listenForLanguageChoice() {
+        if (state !== "choosing_lang") return;
+        debugCaption.textContent = "Listening for language name...";
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        nameRecognition = new SpeechRecognition();
-        nameRecognition.continuous = false;
-        nameRecognition.interimResults = true;
-        nameRecognition.lang = "en-US"; // universal capture mode to pick up names across scripts/accents
-        nameRecognition.maxAlternatives = 1;
+        activeRecognition = new SpeechRecognition();
+        activeRecognition.continuous = false;
+        activeRecognition.interimResults = true;
+        activeRecognition.lang = "en-US";
+        activeRecognition.maxAlternatives = 1;
 
         let gotFinal = false;
 
-        nameRecognition.onresult = function (event) {
+        activeRecognition.onresult = function (event) {
             let liveText = "";
             for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
             debugCaption.textContent = "Heard: " + liveText;
@@ -603,31 +561,86 @@ KIOSK_HTML = r"""
             const last = event.results[event.results.length - 1];
             if (last.isFinal) {
                 gotFinal = true;
-                const transcriptText = last[0].transcript;
-                const staff = findStaff(transcriptText);
-                const detectedLang = detectLanguageFromTranscript(transcriptText);
+                const chosenLang = detectLanguageChoice(last[0].transcript);
+                if (chosenLang) {
+                    startNameCapture(chosenLang);
+                } else {
+                    // Default fallback to English if not recognized
+                    startNameCapture(LANGUAGES[0]);
+                }
+            }
+        };
+        activeRecognition.onerror = function () {};
+        activeRecognition.onend = function () {
+            if (state === "choosing_lang" && !gotFinal) {
+                startNameCapture(LANGUAGES[0]); // Default to English on timeout
+            }
+        };
 
+        try { activeRecognition.start(); } catch (e) {
+            setTimeout(() => startNameCapture(LANGUAGES[0]), 500);
+        }
+    }
+
+    // Step 2: Listen for name/login in the selected language
+    function startNameCapture(langCfg) {
+        state = "awaiting_id";
+        bgVideo.volume = LISTENING_VIDEO_VOLUME;
+        setPill("Kindly tell me your login or name", "Listening (" + langCfg.label + ")...");
+
+        let started = false;
+        function begin() {
+            if (started || state !== "awaiting_id") return;
+            started = true;
+            listenForName(langCfg);
+        }
+        speak(langCfg.prompt, langCfg.code, begin);
+        setTimeout(begin, 3500);
+    }
+
+    function listenForName(langCfg) {
+        if (state !== "awaiting_id") return;
+        debugCaption.textContent = "Listening (" + langCfg.label + ")...";
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        activeRecognition = new SpeechRecognition();
+        activeRecognition.continuous = false;
+        activeRecognition.interimResults = true;
+        activeRecognition.lang = langCfg.code; // Locked strictly to chosen language
+        activeRecognition.maxAlternatives = 1;
+
+        let gotFinal = false;
+
+        activeRecognition.onresult = function (event) {
+            let liveText = "";
+            for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
+            debugCaption.textContent = "Heard (" + langCfg.label + "): " + liveText;
+
+            const last = event.results[event.results.length - 1];
+            if (last.isFinal) {
+                gotFinal = true;
+                const staff = findStaff(last[0].transcript);
                 if (staff) {
-                    showResult(staff, detectedLang);
+                    showResult(staff, langCfg);
                 } else {
                     setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
-                    speak(detectedLang.sorry, detectedLang.code);
+                    speak(langCfg.sorry, langCfg.code);
                     clearTimeout(resetTimer);
                     resetTimer = setTimeout(resetToIdle, 2500);
                 }
             }
         };
-        nameRecognition.onerror = function () {};
-        nameRecognition.onend = function () {
+        activeRecognition.onerror = function () {};
+        activeRecognition.onend = function () {
             if (state === "awaiting_id" && !gotFinal) {
                 setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
-                speak(LANGUAGES["en"].sorry, LANGUAGES["en"].code);
+                speak(langCfg.sorry, langCfg.code);
                 clearTimeout(resetTimer);
                 resetTimer = setTimeout(resetToIdle, 2500);
             }
         };
 
-        try { nameRecognition.start(); } catch (e) {
+        try { activeRecognition.start(); } catch (e) {
             clearTimeout(resetTimer);
             resetTimer = setTimeout(resetToIdle, 500);
         }
@@ -653,7 +666,7 @@ KIOSK_HTML = r"""
 
     window.addEventListener("beforeunload", function () {
         shouldRun = false;
-        stopNameCapture();
+        stopActiveRecognition();
         if (wakeRecognition) { try { wakeRecognition.stop(); } catch (e) {} }
     });
 })();
