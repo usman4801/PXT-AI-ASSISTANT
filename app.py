@@ -377,63 +377,52 @@ KIOSK_HTML = r"""
     // regardless of what language the employee speaks afterwards.
     const WAKE_LANG = "en-US";
 
-    // After the wake word, the kiosk asks "what's your name / login" ONCE, in
-    // English — the employee can answer in any of the languages below, in
-    // whichever language they naturally speak. No language menu is asked.
-    // Add/remove/reorder languages here as needed.
+    // After the wake word, the kiosk first asks "what's your name / login"
+    // (always in English, for reliable matching against staff_data.csv),
+    // and only AFTER the employee is found does it ask which language they'd
+    // like their update spoken in. Add/remove/reorder languages here.
     const LANGUAGES = [
-        { code: "en-US", label: "English",   prompt: "Kindly tell me your login or name.",
+        { code: "en-US", label: "English",
           reply: (n,s,l,d) => `Hello ${n}. Your status is ${s}. You have ${l} leaves remaining. Your next off day is ${d}.`,
           sorry: "Sorry, I could not find your record. Please try again." },
-        { code: "ur-PK", label: "Urdu",      prompt: "براہ مہربانی اپنا نام یا لاگ ان بتائیں۔",
+        { code: "ur-PK", label: "Urdu",
           reply: (n,s,l,d) => `السلام علیکم ${n}۔ آپ کی حاضری کی صورتحال ${s} ہے۔ آپ کی ${l} چھٹیاں باقی ہیں۔ آپ کی اگلی چھٹی کا دن ${d} ہے۔`,
           sorry: "معذرت، آپ کا ریکارڈ نہیں ملا۔ دوبارہ کوشش کریں۔" },
-        { code: "hi-IN", label: "Hindi",     prompt: "कृपया अपना नाम या लॉगिन बताएं।",
+        { code: "hi-IN", label: "Hindi",
           reply: (n,s,l,d) => `नमस्ते ${n}। आपकी स्थिति ${s} है। आपकी ${l} छुट्टियाँ शेष हैं। आपका अगला अवकाश दिन ${d} है।`,
           sorry: "क्षमा करें, आपका रिकॉर्ड नहीं मिला। कृपया पुनः प्रयास करें।" },
-        { code: "ta-IN", label: "Tamil",     prompt: "தயவுசெய்து உங்கள் பெயர் அல்லது லாகின் சொல்லுங்கள்.",
+        { code: "ta-IN", label: "Tamil",
           reply: (n,s,l,d) => `வணக்கம் ${n}. உங்கள் நிலை ${s}. உங்களுக்கு ${l} விடுப்பு மீதம் உள்ளது. உங்கள் அடுத்த ஓய்வு நாள் ${d}.`,
           sorry: "மன்னிக்கவும், உங்கள் பதிவு கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்." },
-        { code: "ml-IN", label: "Malayalam", prompt: "ദയവായി നിങ്ങളുടെ പേര് അല്ലെങ്കിൽ ലോഗിൻ പറയൂ.",
+        { code: "ml-IN", label: "Malayalam",
           reply: (n,s,l,d) => `ഹലോ ${n}. നിങ്ങളുടെ സ്ഥിതി ${s} ആണ്. നിങ്ങൾക്ക് ${l} അവധി ദിനങ്ങൾ ബാക്കിയുണ്ട്. നിങ്ങളുടെ അടുത്ത അവധി ദിവസം ${d} ആണ്.`,
           sorry: "ക്ഷമിക്കണം, നിങ്ങളുടെ റെക്കോർഡ് കണ്ടെത്താനായില്ല. വീണ്ടും ശ്രമിക്കുക." },
-        { code: "ar-SA", label: "Arabic",    prompt: "من فضلك أخبرني باسمك أو اسم الدخول الخاص بك.",
+        { code: "ar-SA", label: "Arabic",
           reply: (n,s,l,d) => `مرحباً ${n}. حالتك ${s}. لديك ${l} إجازة متبقية. يوم إجازتك القادم هو ${d}.`,
           sorry: "عذراً، لم أتمكن من العثور على سجلك. يرجى المحاولة مرة أخرى." },
-        { code: "yo-NG", label: "Yoruba",    prompt: "Jọwọ sọ orukọ tabi login rẹ fun mi.",
+        { code: "yo-NG", label: "Yoruba",
           reply: (n,s,l,d) => `Bawo ni ${n}. Ipo rẹ ni ${s}. O ni ọjọ isinmi ${l} to ku. Ọjọ isinmi rẹ to nbọ ni ${d}.`,
           sorry: "Ma binu, mi ò rí àkọsílẹ̀ rẹ. Jọwọ tún gbìyànjú." },
-        { code: "ha-NG", label: "Hausa",     prompt: "Don Allah gaya mini sunanka ko shiga.",
+        { code: "ha-NG", label: "Hausa",
           reply: (n,s,l,d) => `Sannu ${n}. Matsayin ku shine ${s}. Kuna da hutu ${l} da suka rage. Ranar hutunku ta gaba shine ${d}.`,
           sorry: "Yi hakuri, ban sami bayanan ku ba. Don Allah a sake gwadawa." },
-        { code: "ig-NG", label: "Igbo",      prompt: "Biko gwa m aha gị ma ọ bụ nbanye gị.",
+        { code: "ig-NG", label: "Igbo",
           reply: (n,s,l,d) => `Ndewo ${n}. Ọnọdụ gị bụ ${s}. I nwere ezumike ${l} fọdụrụ. Ụbọchị izu ike gị na-abịa bụ ${d}.`,
           sorry: "Ndo, achọtaghị ndekọ gị. Biko nwaa ọzọ." },
-        { code: "lg-UG", label: "Luganda",   prompt: "Nsaba mumbulire erinnya lyo oba login yo.",
+        { code: "lg-UG", label: "Luganda",
           reply: (n,s,l,d) => `Ki kati ${n}. Embeera yo eri ${s}. Olina ${l} ez'okuwummula ezisigadde. Olunaku lwo olw'okuwummula oluddako lwe ${d}.`,
           sorry: "Nsonyiwa, sisobodde kufuna ndagiriro yo. Ddamu ogezeeko." }
     ];
     // NOTE: All non-English phrases above are best-effort machine translations
     // for this demo/testing build. Have native speakers review and correct
-    // them before real deployment — accuracy is lowest for Yoruba, Hausa,
-    // Igbo and Luganda. Also: the browser's underlying speech engine (Google's
-    // cloud speech service in Chrome) may not actually support recognition
-    // for every one of these languages/dialects. If a language never picks up
-    // a match no matter how clearly someone speaks, that language likely isn't
-    // supported for recognition on this browser — its lang code may need to be
-    // swapped for a closer regional variant.
+    // them before real deployment. Also: since the employee only ever speaks
+    // their name/login in English (see below), the "reply" text is the only
+    // place these translations get used — text-to-speech (speechSynthesis)
+    // generally supports far more languages/dialects than the browser's
+    // speech RECOGNITION does, so this is the reliable half of the pipeline.
 
-    // Chrome's built-in speech engine reliably supports these locales.
-    // Yoruba, Hausa, Igbo and Luganda are NOT well supported by Chrome — a
-    // recognizer for one of those can return unreliable/garbled text, and if
-    // that text happens to match an employee, we still don't actually know
-    // what language was spoken. So a match via one of the codes below is
-    // trusted for the SPOKEN REPLY language; a match from any other language
-    // config still finds and shows the employee correctly, but the reply
-    // falls back to English rather than risking a wrong-language reply.
-    const RELIABLE_LANG_CODES = ["en-US", "hi-IN", "ur-PK", "ta-IN", "ml-IN", "ar-SA"];
-
-    let state = "idle"; // idle | awaiting_id | result
+    let state = "idle"; // idle | awaiting_id | choosing_lang | result
+    let pendingStaff = null; // the employee matched during name capture, waiting on a language choice
     let nameRecognition = null;
     let nameCycleTimer = null;
 
@@ -523,6 +512,7 @@ KIOSK_HTML = r"""
 
     function resetToIdle() {
         state = "idle";
+        pendingStaff = null;
         resumeBackgroundVideo(); // safety net: make sure music is back on in every path
         resultCard.classList.remove("show");
         setPill("I am your PXT AI Assistant", "Say \"Hi PXT\" to start...");
@@ -603,58 +593,6 @@ KIOSK_HTML = r"""
     function stopNameCapture() {
         clearTimeout(nameCycleTimer);
         if (nameRecognition) { try { nameRecognition.stop(); } catch (e) {} try { nameRecognition.abort(); } catch (e) {} }
-        stopAllNameRecognizers();
-    }
-
-    // ---- Ask "what's your name / login" ONCE, in English, then listen for
-    // the answer in EVERY configured language at the same time -------------
-    // Sequential language cycling (tried earlier / the language-menu
-    // approach) has a problem: a real person only says their name once, so
-    // whichever recognizer happens to be listening at that exact moment is
-    // the only one that hears anything. Running one recognizer PER language
-    // concurrently, all listening to the same prompt/answer at once, means
-    // whichever language the employee actually spoke is heard and matched —
-    // no menu, no "please choose a language" step, and no need to guess.
-    // Whichever recognizer is first to produce a transcript that matches a
-    // staff record "wins"; every other recognizer is then stopped, and the
-    // reply is spoken back in that same matched language.
-    let activeRecognizers = [];
-    let nameResolved = false;
-    let nameCandidates = [];
-    let nameGraceTimer = null;
-    const MATCH_GRACE_MS = 700; // wait this long after the first match to let a more reliable language's result arrive too
-
-    function stopAllNameRecognizers() {
-        clearTimeout(nameGraceTimer);
-        nameGraceTimer = null;
-        activeRecognizers.forEach(function (r) {
-            try { r.onresult = null; r.onend = null; r.onerror = null; } catch (e) {}
-            try { r.stop(); } catch (e) {}
-            try { r.abort(); } catch (e) {}
-        });
-        activeRecognizers = [];
-    }
-
-    // Once at least one language has matched a staff member, wait a short
-    // grace period instead of resolving instantly — this gives a reliable
-    // language's recognizer (which can be a beat slower) a chance to also
-    // report in. If a reliable-language match shows up within that window,
-    // it's used over an unreliable one, even if the unreliable one answered
-    // first.
-    function resolveBestCandidate() {
-        nameGraceTimer = null;
-        if (nameResolved || nameCandidates.length === 0) return;
-        nameResolved = true;
-        stopAllNameRecognizers();
-
-        let winner = nameCandidates.find(function (c) { return RELIABLE_LANG_CODES.includes(c.langCfg.code); });
-        if (!winner) winner = nameCandidates[0];
-
-        const trusted = RELIABLE_LANG_CODES.includes(winner.langCfg.code);
-        debugCaption.textContent = "Matched: " + winner.staff.name + " (" + winner.langCfg.label + (trusted ? "" : " — unverified, replying in English") + ")";
-
-        const replyCfg = trusted ? winner.langCfg : LANGUAGES[0];
-        showResult(winner.staff, replyCfg);
     }
 
     // Fully pause (not just duck) the background video while listening, so
@@ -671,8 +609,10 @@ KIOSK_HTML = r"""
         }
     }
 
+    // ---- Step 1: ask "what's your name / login", in English -------------
     function startNameCaptureAuto() {
         state = "awaiting_id";
+        pendingStaff = null;
         pauseBackgroundVideo();
         setPill("Kindly tell me your login or name", "Listening...");
 
@@ -680,78 +620,153 @@ KIOSK_HTML = r"""
         function begin() {
             if (started || state !== "awaiting_id") return;
             started = true;
-            listenForNameMultilang();
+            listenForName();
         }
         speak("Kindly tell me your login or name.", "en-US", begin);
         setTimeout(begin, 3500); // fallback if TTS onend never fires
     }
 
-    function listenForNameMultilang() {
+    function listenForName() {
         if (state !== "awaiting_id") return;
         debugCaption.textContent = "Listening...";
-
-        nameResolved = false;
-        nameCandidates = [];
-        clearTimeout(nameGraceTimer);
-        nameGraceTimer = null;
-        stopAllNameRecognizers();
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) return;
 
-        let endedCount = 0;
-        const total = LANGUAGES.length;
+        nameRecognition = new SpeechRecognition();
+        nameRecognition.continuous = false;
+        nameRecognition.interimResults = true;
+        nameRecognition.lang = "en-US";
+        nameRecognition.maxAlternatives = 1;
 
-        LANGUAGES.forEach(function (langCfg) {
-            let rec;
-            try {
-                rec = new SpeechRecognition();
-            } catch (e) {
-                endedCount++;
-                return;
-            }
-            rec.continuous = false;
-            rec.interimResults = true;
-            rec.lang = langCfg.code;
-            rec.maxAlternatives = 1;
+        let gotFinal = false;
 
-            rec.onresult = function (event) {
-                if (nameResolved || state !== "awaiting_id") return;
-                let liveText = "";
-                for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
-                if (liveText.trim() !== "") {
-                    debugCaption.textContent = "Heard (" + langCfg.label + "): " + liveText;
-                }
+        nameRecognition.onresult = function (event) {
+            let liveText = "";
+            for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
+            debugCaption.textContent = "Heard: " + liveText;
 
-                const last = event.results[event.results.length - 1];
-                if (last.isFinal) {
-                    const staff = findStaff(last[0].transcript);
-                    if (staff && !nameResolved) {
-                        nameCandidates.push({ staff: staff, langCfg: langCfg });
-                        if (!nameGraceTimer) {
-                            nameGraceTimer = setTimeout(resolveBestCandidate, MATCH_GRACE_MS);
-                        }
-                    }
-                }
-            };
-            rec.onerror = function () { /* handled by onend below */ };
-            rec.onend = function () {
-                endedCount++;
-                if (!nameResolved && !nameGraceTimer && endedCount >= total && state === "awaiting_id") {
+            const last = event.results[event.results.length - 1];
+            if (last.isFinal) {
+                gotFinal = true;
+                const staff = findStaff(last[0].transcript);
+                if (staff) {
+                    pendingStaff = staff;
+                    startLanguageSelection(staff);
+                } else {
                     setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
                     speak(LANGUAGES[0].sorry, "en-US");
                     clearTimeout(resetTimer);
                     resetTimer = setTimeout(resetToIdle, 2500);
                 }
-            };
-
-            try {
-                rec.start();
-                activeRecognizers.push(rec);
-            } catch (e) {
-                endedCount++;
             }
-        });
+        };
+        nameRecognition.onerror = function () { /* handled by onend */ };
+        nameRecognition.onend = function () {
+            if (state === "awaiting_id" && !gotFinal) {
+                setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
+                speak(LANGUAGES[0].sorry, "en-US");
+                clearTimeout(resetTimer);
+                resetTimer = setTimeout(resetToIdle, 2500);
+            }
+        };
+
+        try { nameRecognition.start(); } catch (e) {
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(resetToIdle, 500);
+        }
+    }
+
+    // ---- Step 2: NOW ask which language, once the employee is known -----
+    const LANGUAGE_KEYWORDS = [
+        { idx: 0, words: ["english"] },
+        { idx: 1, words: ["urdu"] },
+        { idx: 2, words: ["hindi"] },
+        { idx: 3, words: ["tamil"] },
+        { idx: 4, words: ["malayalam", "malayali"] },
+        { idx: 5, words: ["arabic"] },
+        { idx: 6, words: ["yoruba"] },
+        { idx: 7, words: ["hausa"] },
+        { idx: 8, words: ["igbo"] },
+        { idx: 9, words: ["luganda", "uganda", "ganda"] }
+    ];
+    const LANG_PROMPT = "Which language would you like your update in? Say: English, Urdu, Hindi, Tamil, Malayalam, Arabic, Yoruba, Hausa, Igbo, or Luganda.";
+    let langSelectAttempts = 0;
+
+    function detectLanguageChoice(transcript) {
+        const t = normalize(transcript);
+        for (const entry of LANGUAGE_KEYWORDS) {
+            if (entry.words.some(w => t.includes(w))) return LANGUAGES[entry.idx];
+        }
+        return null;
+    }
+
+    function startLanguageSelection(staff) {
+        state = "choosing_lang";
+        langSelectAttempts = 0;
+        setPill("Which language would you like?", "Say: English, Urdu, Hindi, Tamil...");
+
+        let started = false;
+        function begin() {
+            if (started || state !== "choosing_lang") return;
+            started = true;
+            listenForLanguageChoice(staff);
+        }
+        speak(LANG_PROMPT, "en-US", begin);
+        setTimeout(begin, 4500); // fallback if TTS onend never fires
+    }
+
+    function listenForLanguageChoice(staff) {
+        if (state !== "choosing_lang") return;
+        debugCaption.textContent = "Listening for language...";
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return;
+
+        nameRecognition = new SpeechRecognition();
+        nameRecognition.continuous = false;
+        nameRecognition.interimResults = true;
+        nameRecognition.lang = "en-US"; // language NAMES are said in English regardless of the chosen language
+        nameRecognition.maxAlternatives = 1;
+
+        let gotFinal = false;
+
+        nameRecognition.onresult = function (event) {
+            let liveText = "";
+            for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
+            debugCaption.textContent = "Heard: " + liveText;
+
+            const last = event.results[event.results.length - 1];
+            if (last.isFinal) {
+                gotFinal = true;
+                const chosen = detectLanguageChoice(last[0].transcript);
+                if (chosen) {
+                    showResult(staff, chosen);
+                } else {
+                    langSelectAttempts++;
+                    if (langSelectAttempts >= 3) {
+                        showResult(staff, LANGUAGES[0]); // give up asking, default to English
+                    } else {
+                        nameCycleTimer = setTimeout(function () { listenForLanguageChoice(staff); }, 300);
+                    }
+                }
+            }
+        };
+        nameRecognition.onerror = function () { /* handled by onend */ };
+        nameRecognition.onend = function () {
+            if (state === "choosing_lang" && !gotFinal) {
+                langSelectAttempts++;
+                if (langSelectAttempts >= 3) {
+                    showResult(staff, LANGUAGES[0]);
+                } else {
+                    nameCycleTimer = setTimeout(function () { listenForLanguageChoice(staff); }, 200);
+                }
+            }
+        };
+
+        try { nameRecognition.start(); } catch (e) {
+            nameCycleTimer = setTimeout(function () { listenForLanguageChoice(staff); }, 300);
+        }
     }
 
     // Kiosk mode: everything starts automatically on load — video plays with sound
