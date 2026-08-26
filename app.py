@@ -492,6 +492,7 @@ KIOSK_HTML = r"""
 
     function showResult(staff, langCfg) {
         state = "result";
+        resumeBackgroundVideo(); // data is being delivered — bring the music back
         resultCard.classList.add("show");
         rName.textContent = staff.name;
         rId.textContent = staff.id;
@@ -512,7 +513,7 @@ KIOSK_HTML = r"""
 
     function resetToIdle() {
         state = "idle";
-        bgVideo.volume = IDLE_VIDEO_VOLUME;
+        resumeBackgroundVideo(); // safety net: make sure music is back on in every path
         resultCard.classList.remove("show");
         setPill("I am your PXT AI Assistant", "Say \"Hi PXT\" to start...");
         stopNameCapture();
@@ -619,9 +620,23 @@ KIOSK_HTML = r"""
         activeRecognizers = [];
     }
 
+    // Fully pause (not just duck) the background video while listening, so
+    // the mic isn't picking up music under the employee's voice. Resumed by
+    // resumeBackgroundVideo() as soon as a result is delivered / kiosk resets.
+    function pauseBackgroundVideo() {
+        try { bgVideo.pause(); } catch (e) {}
+        bgVideo.volume = LISTENING_VIDEO_VOLUME;
+    }
+    function resumeBackgroundVideo() {
+        bgVideo.volume = IDLE_VIDEO_VOLUME;
+        if (bgVideo.paused) {
+            bgVideo.play().catch(function () {});
+        }
+    }
+
     function startNameCaptureAuto() {
         state = "awaiting_id";
-        bgVideo.volume = LISTENING_VIDEO_VOLUME;
+        pauseBackgroundVideo();
         setPill("Kindly tell me your login or name", "Listening...");
 
         let started = false;
