@@ -377,8 +377,9 @@ KIOSK_HTML = r"""
     // regardless of what language the employee speaks afterwards.
     const WAKE_LANG = "en-US";
 
-    // After the wake word, the kiosk cycles through these languages to capture
-    // the employee's name/login, a few seconds each, until one of them matches.
+    // After the wake word, the kiosk asks "what's your name / login" ONCE, in
+    // English — the employee can answer in any of the languages below, in
+    // whichever language they naturally speak. No language menu is asked.
     // Add/remove/reorder languages here as needed.
     const LANGUAGES = [
         { code: "en-US", label: "English",   prompt: "Kindly tell me your login or name.",
@@ -417,15 +418,14 @@ KIOSK_HTML = r"""
     // them before real deployment — accuracy is lowest for Yoruba, Hausa,
     // Igbo and Luganda. Also: the browser's underlying speech engine (Google's
     // cloud speech service in Chrome) may not actually support recognition
-    // for every one of these languages/dialects. If a language's "Heard: ..."
-    // caption never updates no matter how clearly someone speaks, that
-    // language likely isn't supported for recognition on this browser —
-    // its lang code may need to be swapped for a closer regional variant.
+    // for every one of these languages/dialects. If a language never picks up
+    // a match no matter how clearly someone speaks, that language likely isn't
+    // supported for recognition on this browser — its lang code may need to be
+    // swapped for a closer regional variant.
 
     let state = "idle"; // idle | awaiting_id | result
     let nameRecognition = null;
     let nameCycleTimer = null;
-    let nameCycleDeadline = 0;
 
     function setPill(line1, line2) {
         pillLine1.textContent = line1;
@@ -572,7 +572,7 @@ KIOSK_HTML = r"""
             const last = event.results[event.results.length - 1];
             if (last.isFinal && isWakeWord(normalize(last[0].transcript))) {
                 try { wakeRecognition.stop(); } catch (e) {}
-                startLanguageSelection();
+                startNameCaptureAuto();
             }
         };
 
@@ -592,168 +592,110 @@ KIOSK_HTML = r"""
     function stopNameCapture() {
         clearTimeout(nameCycleTimer);
         if (nameRecognition) { try { nameRecognition.stop(); } catch (e) {} try { nameRecognition.abort(); } catch (e) {} }
+        stopAllNameRecognizers();
     }
 
-    // ---- Step 1: ask which language, in one quick word --------------------
-    // Sequential auto-cycling (tried earlier) doesn't work reliably: each
-    // language attempt needs FRESH audio, but a real person only says their
-    // name once — so only whichever language happens to be listening at that
-    // exact moment hears anything; every other attempt just hears silence.
-    // Asking for the language first means exactly one recognizer (the right
-    // one) is listening when the person actually says their name — so it
-    // only takes one attempt, not up to ten.
-    const LANGUAGE_KEYWORDS = [
-        { idx: 0, words: ["english"] },
-        { idx: 1, words: ["urdu"] },
-        { idx: 2, words: ["hindi"] },
-        { idx: 3, words: ["tamil"] },
-        { idx: 4, words: ["malayalam", "malayali"] },
-        { idx: 5, words: ["amharic", "ethiopian", "ethiopia"] },
-        { idx: 6, words: ["yoruba"] },
-        { idx: 7, words: ["hausa"] },
-        { idx: 8, words: ["igbo"] },
-        { idx: 9, words: ["luganda", "uganda", "ganda"] }
-    ];
-    const LANG_PROMPT = "Which language? Say: English, Urdu, Hindi, Tamil, Malayalam, Amharic, Yoruba, Hausa, Igbo, or Luganda.";
-    let langSelectAttempts = 0;
+    // ---- Ask "what's your name / login" ONCE, in English, then listen for
+    // the answer in EVERY configured language at the same time -------------
+    // Sequential language cycling (tried earlier / the language-menu
+    // approach) has a problem: a real person only says their name once, so
+    // whichever recognizer happens to be listening at that exact moment is
+    // the only one that hears anything. Running one recognizer PER language
+    // concurrently, all listening to the same prompt/answer at once, means
+    // whichever language the employee actually spoke is heard and matched —
+    // no menu, no "please choose a language" step, and no need to guess.
+    // Whichever recognizer is first to produce a transcript that matches a
+    // staff record "wins"; every other recognizer is then stopped, and the
+    // reply is spoken back in that same matched language.
+    let activeRecognizers = [];
+    let nameResolved = false;
 
-    function detectLanguageChoice(transcript) {
-        const t = normalize(transcript);
-        for (const entry of LANGUAGE_KEYWORDS) {
-            if (entry.words.some(w => t.includes(w))) return LANGUAGES[entry.idx];
-        }
-        return null;
+    function stopAllNameRecognizers() {
+        activeRecognizers.forEach(function (r) {
+            try { r.onresult = null; r.onend = null; r.onerror = null; } catch (e) {}
+            try { r.stop(); } catch (e) {}
+            try { r.abort(); } catch (e) {}
+        });
+        activeRecognizers = [];
     }
 
-    function startLanguageSelection() {
-        state = "choosing_lang";
-        langSelectAttempts = 0;
-        bgVideo.volume = LISTENING_VIDEO_VOLUME;
-        setPill("Which language would you like?", "Say: English, Urdu, Hindi, Tamil...");
-
-        let started = false;
-        function begin() {
-            if (started || state !== "choosing_lang") return;
-            started = true;
-            listenForLanguageChoice();
-        }
-        speak(LANG_PROMPT, "en-US", begin);
-        setTimeout(begin, 4500); // fallback if TTS onend never fires
-    }
-
-    function listenForLanguageChoice() {
-        if (state !== "choosing_lang") return;
-        debugCaption.textContent = "Listening for language...";
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        nameRecognition = new SpeechRecognition();
-        nameRecognition.continuous = false;
-        nameRecognition.interimResults = true;
-        nameRecognition.lang = "en-US"; // language NAMES are said in English regardless of chosen language
-        nameRecognition.maxAlternatives = 1;
-
-        let gotFinal = false;
-
-        nameRecognition.onresult = function (event) {
-            let liveText = "";
-            for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
-            debugCaption.textContent = "Heard: " + liveText;
-
-            const last = event.results[event.results.length - 1];
-            if (last.isFinal) {
-                gotFinal = true;
-                const chosen = detectLanguageChoice(last[0].transcript);
-                if (chosen) {
-                    startNameCapture(chosen);
-                } else {
-                    langSelectAttempts++;
-                    if (langSelectAttempts >= 3) {
-                        startNameCapture(LANGUAGES[0]); // give up asking, default to English
-                    } else {
-                        nameCycleTimer = setTimeout(listenForLanguageChoice, 300);
-                    }
-                }
-            }
-        };
-        nameRecognition.onerror = function () { /* handled by onend */ };
-        nameRecognition.onend = function () {
-            if (state === "choosing_lang" && !gotFinal) {
-                langSelectAttempts++;
-                if (langSelectAttempts >= 3) {
-                    startNameCapture(LANGUAGES[0]);
-                } else {
-                    nameCycleTimer = setTimeout(listenForLanguageChoice, 200);
-                }
-            }
-        };
-
-        try { nameRecognition.start(); } catch (e) {
-            nameCycleTimer = setTimeout(listenForLanguageChoice, 300);
-        }
-    }
-
-    // ---- Step 2: listen for name/login in exactly the chosen language -----
-    function startNameCapture(langCfg) {
+    function startNameCaptureAuto() {
         state = "awaiting_id";
         bgVideo.volume = LISTENING_VIDEO_VOLUME;
-        setPill("Kindly tell me your login or name", "Listening (" + langCfg.label + ")...");
+        setPill("Kindly tell me your login or name", "Listening...");
 
         let started = false;
         function begin() {
             if (started || state !== "awaiting_id") return;
             started = true;
-            listenForName(langCfg);
+            listenForNameMultilang();
         }
-        speak(langCfg.prompt, langCfg.code, begin);
+        speak("Kindly tell me your login or name.", "en-US", begin);
         setTimeout(begin, 3500); // fallback if TTS onend never fires
     }
 
-    function listenForName(langCfg) {
+    function listenForNameMultilang() {
         if (state !== "awaiting_id") return;
-        debugCaption.textContent = "Listening (" + langCfg.label + ")...";
+        debugCaption.textContent = "Listening...";
+
+        nameResolved = false;
+        stopAllNameRecognizers();
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        nameRecognition = new SpeechRecognition();
-        nameRecognition.continuous = false;
-        nameRecognition.interimResults = true;
-        nameRecognition.lang = langCfg.code;
-        nameRecognition.maxAlternatives = 1;
+        if (!SpeechRecognition) return;
 
-        let gotFinal = false;
+        let endedCount = 0;
+        const total = LANGUAGES.length;
 
-        nameRecognition.onresult = function (event) {
-            let liveText = "";
-            for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
-            debugCaption.textContent = "Heard (" + langCfg.label + "): " + liveText;
+        LANGUAGES.forEach(function (langCfg) {
+            let rec;
+            try {
+                rec = new SpeechRecognition();
+            } catch (e) {
+                endedCount++;
+                return;
+            }
+            rec.continuous = false;
+            rec.interimResults = true;
+            rec.lang = langCfg.code;
+            rec.maxAlternatives = 1;
 
-            const last = event.results[event.results.length - 1];
-            if (last.isFinal) {
-                gotFinal = true;
-                const staff = findStaff(last[0].transcript);
-                if (staff) {
-                    showResult(staff, langCfg);
-                } else {
+            rec.onresult = function (event) {
+                if (nameResolved || state !== "awaiting_id") return;
+                let liveText = "";
+                for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
+                if (liveText.trim() !== "") {
+                    debugCaption.textContent = "Heard (" + langCfg.label + "): " + liveText;
+                }
+
+                const last = event.results[event.results.length - 1];
+                if (last.isFinal) {
+                    const staff = findStaff(last[0].transcript);
+                    if (staff && !nameResolved) {
+                        nameResolved = true;
+                        stopAllNameRecognizers();
+                        showResult(staff, langCfg);
+                    }
+                }
+            };
+            rec.onerror = function () { /* handled by onend below */ };
+            rec.onend = function () {
+                endedCount++;
+                if (!nameResolved && endedCount >= total && state === "awaiting_id") {
                     setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
-                    speak(langCfg.sorry, langCfg.code);
+                    speak(LANGUAGES[0].sorry, "en-US");
                     clearTimeout(resetTimer);
                     resetTimer = setTimeout(resetToIdle, 2500);
                 }
-            }
-        };
-        nameRecognition.onerror = function () { /* handled by onend */ };
-        nameRecognition.onend = function () {
-            if (state === "awaiting_id" && !gotFinal) {
-                setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
-                speak(langCfg.sorry, langCfg.code);
-                clearTimeout(resetTimer);
-                resetTimer = setTimeout(resetToIdle, 2500);
-            }
-        };
+            };
 
-        try { nameRecognition.start(); } catch (e) {
-            clearTimeout(resetTimer);
-            resetTimer = setTimeout(resetToIdle, 500);
-        }
+            try {
+                rec.start();
+                activeRecognizers.push(rec);
+            } catch (e) {
+                endedCount++;
+            }
+        });
     }
 
     // Kiosk mode: everything starts automatically on load — video plays with sound
