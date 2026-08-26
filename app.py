@@ -397,9 +397,9 @@ KIOSK_HTML = r"""
         { code: "ml-IN", label: "Malayalam", prompt: "ദയവായി നിങ്ങളുടെ പേര് അല്ലെങ്കിൽ ലോഗിൻ പറയൂ.",
           reply: (n,s,l,d) => `ഹലോ ${n}. നിങ്ങളുടെ സ്ഥിതി ${s} ആണ്. നിങ്ങൾക്ക് ${l} അവധി ദിനങ്ങൾ ബാക്കിയുണ്ട്. നിങ്ങളുടെ അടുത്ത അവധി ദിവസം ${d} ആണ്.`,
           sorry: "ക്ഷമിക്കണം, നിങ്ങളുടെ റെക്കോർഡ് കണ്ടെത്താനായില്ല. വീണ്ടും ശ്രമിക്കുക." },
-        { code: "am-ET", label: "Amharic",   prompt: "እባክዎ ስምዎን ወይም መግቢያዎን ይንገሩኝ።",
-          reply: (n,s,l,d) => `ሰላም ${n}። ሁኔታዎ ${s} ነው። ${l} ቀሪ የእረፍት ቀናት አሉዎት። ቀጣዩ የእረፍት ቀንዎ ${d} ነው።`,
-          sorry: "ይቅርታ፣ መዝገብዎ አልተገኘም። እባክዎ ደግመው ይሞክሩ።" },
+        { code: "ar-SA", label: "Arabic",    prompt: "من فضلك أخبرني باسمك أو اسم الدخول الخاص بك.",
+          reply: (n,s,l,d) => `مرحباً ${n}. حالتك ${s}. لديك ${l} إجازة متبقية. يوم إجازتك القادم هو ${d}.`,
+          sorry: "عذراً، لم أتمكن من العثور على سجلك. يرجى المحاولة مرة أخرى." },
         { code: "yo-NG", label: "Yoruba",    prompt: "Jọwọ sọ orukọ tabi login rẹ fun mi.",
           reply: (n,s,l,d) => `Bawo ni ${n}. Ipo rẹ ni ${s}. O ni ọjọ isinmi ${l} to ku. Ọjọ isinmi rẹ to nbọ ni ${d}.`,
           sorry: "Ma binu, mi ò rí àkọsílẹ̀ rẹ. Jọwọ tún gbìyànjú." },
@@ -422,6 +422,16 @@ KIOSK_HTML = r"""
     // a match no matter how clearly someone speaks, that language likely isn't
     // supported for recognition on this browser — its lang code may need to be
     // swapped for a closer regional variant.
+
+    // Chrome's built-in speech engine reliably supports these locales.
+    // Yoruba, Hausa, Igbo and Luganda are NOT well supported by Chrome — a
+    // recognizer for one of those can return unreliable/garbled text, and if
+    // that text happens to match an employee, we still don't actually know
+    // what language was spoken. So a match via one of the codes below is
+    // trusted for the SPOKEN REPLY language; a match from any other language
+    // config still finds and shows the employee correctly, but the reply
+    // falls back to English rather than risking a wrong-language reply.
+    const RELIABLE_LANG_CODES = ["en-US", "hi-IN", "ur-PK", "ta-IN", "ml-IN", "ar-SA"];
 
     let state = "idle"; // idle | awaiting_id | result
     let nameRecognition = null;
@@ -689,7 +699,11 @@ KIOSK_HTML = r"""
                     if (staff && !nameResolved) {
                         nameResolved = true;
                         stopAllNameRecognizers();
-                        showResult(staff, langCfg);
+                        // Only reply in the matched language if that language's
+                        // recognition is actually trustworthy — otherwise default
+                        // the spoken reply to English (see RELIABLE_LANG_CODES).
+                        const replyCfg = RELIABLE_LANG_CODES.includes(langCfg.code) ? langCfg : LANGUAGES[0];
+                        showResult(staff, replyCfg);
                     }
                 }
             };
