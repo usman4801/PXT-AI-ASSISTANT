@@ -338,21 +338,21 @@ KIOSK_HTML = r"""
 
     const WAKE_LANG = "en-US";
 
-    // Supported languages dictionary
-    const LANGUAGES = [
-        { code: "en-US", label: "English", keywords: ["english"], prompt: "Kindly tell me your login or name.", reply: (n,s,l,d) => `Hello ${n}. Your status is ${s}. You have ${l} leaves remaining. Your next off day is ${d}.`, sorry: "Sorry, I could not find your record. Please try again." },
-        { code: "ur-PK", label: "Urdu", keywords: ["urdu", "ordou"], prompt: "براہ مہربانی اپنا نام یا لاگ ان بتائیں۔", reply: (n,s,l,d) => `السلام علیکم ${n}۔ آپ کی حاضری کی صورتحال ${s} ہے۔ آپ کی ${l} چھٹیاں باقی ہیں۔ آپ کی اگلی چھٹی کا دن ${d} ہے۔`, sorry: "معذرت، آپ کا ریکارڈ نہیں ملا۔ دوبارہ کوشش کریں۔" },
-        { code: "hi-IN", label: "Hindi", keywords: ["hindi", "hindee"], prompt: "कृपया अपना नाम या लॉगिन बताएं।", reply: (n,s,l,d) => `नमस्ते ${n}। आपकी स्थिति ${s} है। आपकी ${l} छुट्टियाँ शेष हैं। आपका अगला अवकाश दिन ${d} है।`, sorry: "क्षमा करें, आपका रिकॉर्ड नहीं मिला। कृपया पुनः प्रयास करें।" },
-        { code: "ta-IN", label: "Tamil", keywords: ["tamil"], prompt: "தயவுசெய்து உங்கள் பெயர் அல்லது லாகின் சொல்லுங்கள்.", reply: (n,s,l,d) => `வணக்கம் ${n}. உங்கள் நிலை ${s}. உங்களுக்கு ${l} விடுப்பு மீதம் உள்ளது. உங்கள் அடுத்த ஓய்வு நாள் ${d}.`, sorry: "மன்னிக்கவும், உங்கள் பதிவு கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்." },
-        { code: "ml-IN", label: "Malayalam", keywords: ["malayalam", "malayali"], prompt: "ദയവായി നിങ്ങളുടെ പേര് അല്ലെങ്കിൽ ലോഗിൻ പറയൂ.", reply: (n,s,l,d) => `ഹലോ ${n}. നിങ്ങളുടെ സ്ഥിതി ${s} ആണ്. നിങ്ങൾക്ക് ${l} അവധി ദിനങ്ങൾ ബാക്കിയുണ്ട്. നിങ്ങളുടെ അടുത്ത അവധി ദിവസം ${d} ആണ്.`, sorry: "ക്ഷമിക്കണം, നിങ്ങളുടെ റെക്കോർഡ് കണ്ടെത്താനായില്ല. വീണ്ടും ശ്രമിക്കുക." },
-        { code: "am-ET", label: "Amharic", keywords: ["amharic", "ethiopian"], prompt: "እባክዎ ስምዎን ወይም መግቢያዎን ይንገሩኝ።", reply: (n,s,l,d) => `ሰላም ${n}። ሁኔታዎ ${s} ነው። ${l} ቀሪ የእረፍት ቀናት አሉዎት። ቀጣዩ የእረፍት ቀንዎ ${d} ነው።`, sorry: "ይቅርታ፣ መዝገብዎ አልተገኘም። እባክዎ ደግመው ይሞክሩ።" },
-        { code: "yo-NG", label: "Yoruba", keywords: ["yoruba"], prompt: "Jọwọ sọ orukọ tabi login rẹ fun mi.", reply: (n,s,l,d) => `Bawo ni ${n}. Ipo rẹ ni ${s}. O ni ọjọ isinmi ${l} to ku. Ọjọ isinmi rẹ to nbọ ni ${d}.`, sorry: "Ma binu, mi ò rí àkọsílẹ̀ rẹ. Jọwọ tún gbìyànjú." },
-        { code: "ha-NG", label: "Hausa", keywords: ["hausa"], prompt: "Don Allah gaya mini sunanka ko shiga.", reply: (n,s,l,d) => `Sannu ${n}. Matsayin ku shine ${s}. Kuna da hutu ${l} da suka rage. Ranar hutunku ta gaba shine ${d}.`, sorry: "Yi hakuri, ban sami bayanan ku ba. Don Allah a sake gwadawa." },
-        { code: "ig-NG", label: "Igbo", keywords: ["igbo"], prompt: "Biko gwa m aha gị ma ọ bụ nbanye gị.", reply: (n,s,l,d) => `Ndewo ${n}. Ọnọdụ gị bụ ${s}. I nwere ezumike ${l} fọdụrụ. Ụbọchị izu ike gị na-abịa bụ ${d}.`, sorry: "Ndo, achọtaghị ndekọ gị. Biko nwaa ọzọ." },
-        { code: "lg-UG", label: "Luganda", keywords: ["luganda", "uganda", "ganda"], prompt: "Nsaba mumbulire erinnya lyo oba login yo.", reply: (n,s,l,d) => `Ki kati ${n}. Embeera yo eri ${s}. Olina ${l} ez'okuwummula ezisigadde. Olunaku lwo olw'okuwummula oluddako lwe ${d}.`, sorry: "Nsonyiwa, sisobodde kufuna ndagiriro yo. Ddamu ogezeeko." }
-    ];
+    // Language configurations for reply templates
+    const LANGUAGES = {
+        "en": { code: "en-US", reply: (n,s,l,d) => `Hello ${n}. Your status is ${s}. You have ${l} leaves remaining. Your next off day is ${d}.`, sorry: "Sorry, I could not find your record. Please try again." },
+        "ur": { code: "ur-PK", reply: (n,s,l,d) => `السلام علیکم ${n}۔ آپ کی حاضری کی صورتحال ${s} ہے۔ آپ کی ${l} چھٹیاں باقی ہیں۔ آپ کی اگلی چھٹی کا دن ${d} ہے۔`, sorry: "معذرت، آپ کا ریکارڈ نہیں ملا۔ دوبارہ کوشش کریں۔" },
+        "hi": { code: "hi-IN", reply: (n,s,l,d) => `नमस्ते ${n}। आपकी स्थिति ${s} है। आपकी ${l} छुट्टियाँ शेष हैं। आपका अगला अवकाश दिन ${d} है।`, sorry: "क्षमा करें, आपका रिकॉर्ड नहीं मिला। कृपया पुनः प्रयास करें।" },
+        "ta": { code: "ta-IN", reply: (n,s,l,d) => `வணக்கம் ${n}. உங்கள் நிலை ${s}. உங்களுக்கு ${l} விடுப்பு மீதம் உள்ளது. உங்கள் அடுத்த ஓய்வு நாள் ${d}.`, sorry: "மன்னிக்கவும், உங்கள் பதிவு கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்." },
+        "ml": { code: "ml-IN", reply: (n,s,l,d) => `ഹലോ ${n}. നിങ്ങളുടെ സ്ഥിതി ${s} ആണ്. നിങ്ങൾക്ക് ${l} അവധി ദിനങ്ങൾ ബാക്കിയുണ്ട്. നിങ്ങളുടെ അടുത്ത അവധി ദിവസം ${d} ആണ്.`, sorry: "ക്ഷമിക്കണം, നിങ്ങളുടെ റെക്കോർഡ് കണ്ടെത്താനായില്ല. വീണ്ടും ശ്രമിക്കുക." },
+        "am": { code: "am-ET", reply: (n,s,l,d) => `ሰላም ${n}። ሁኔታዎ ${s} ነው። ${l} ቀሪ የእረፍት ቀናት አሉዎት። ቀጣዩ የእረፍት ቀንዎ ${d} ነው።`, sorry: "ይቅርታ፣ መዝገብዎ አልተገኘም። እባክዎ ደግመው ይሞክሩ።" },
+        "yo": { code: "yo-NG", reply: (n,s,l,d) => `Bawo ni ${n}. Ipo rẹ ni ${s}. O ni ọjọ isinmi ${l} to ku. Ọjọ isinmi rẹ to nbọ ni ${d}.`, sorry: "Ma binu, mi ò rí àkọsílẹ̀ rẹ. Jọwọ tún gbìyànjú." },
+        "ha": { code: "ha-NG", reply: (n,s,l,d) => `Sannu ${n}. Matsayin ku shine ${s}. Kuna da hutu ${l} da suka rage. Ranar hutunku ta gaba shine ${d}.`, sorry: "Yi hakuri, ban sami bayanan ku ba. Don Allah a sake gwadawa." },
+        "ig": { code: "ig-NG", reply: (n,s,l,d) => `Ndewo ${n}. Ọnọdụ gị bụ ${s}. I nwere ezumike ${l} fọdụrụ. Ụbọchị izu ike gị na-abịa bụ ${d}.`, sorry: "Ndo, achọtaghị ndekọ gị. Biko nwaa ọzọ." },
+        "lg": { code: "lg-UG", reply: (n,s,l,d) => `Ki kati ${n}. Embeera yo eri ${s}. Olina ${l} ez'okuwummula ezisigadde. Olunaku lwo olw'okuwummula oluddako lwe ${d}.`, sorry: "Nsonyiwa, sisobodde kufuna ndagiriro yo. Ddamu ogezeeko." }
+    };
 
-    let state = "idle"; // idle | choosing_lang | awaiting_id | result
+    let state = "idle"; // idle | awaiting_id | result
     let activeRecognition = null;
     let resetTimer = null;
 
@@ -410,6 +410,34 @@ KIOSK_HTML = r"""
         if (s.includes("present")) return "status-present";
         if (s.includes("absent")) return "status-absent";
         return "status-other";
+    }
+
+    // Smart detection for Roman Urdu, Hindi, or native scripts to reply in correct language
+    function detectLanguageFromTranscript(transcript) {
+        const t = transcript || "";
+        const lower = t.toLowerCase();
+
+        // Native script checks
+        if (/[\u0600-\u06FF]/.test(t)) return LANGUAGES["ur"];
+        if (/[\u0900-\u097F]/.test(t)) return LANGUAGES["hi"];
+        if (/[\u0B80-\u0BFF]/.test(t)) return LANGUAGES["ta"];
+        if (/[\u0D00-\u0D7F]/.test(t)) return LANGUAGES["ml"];
+        if (/[\u1200-\u137F]/.test(t)) return LANGUAGES["am"];
+
+        // Roman Urdu / Hindi conversational keywords
+        const urduKeywords = ["mera", "naam", "hai", "mujhe", "meri", "chhutti", "chutti", "kaun", "kya", "aap"];
+        const words = lower.split(/\s+/);
+        if (urduKeywords.some(kw => words.includes(kw)) || lower.includes("mera naam")) {
+            return LANGUAGES["ur"];
+        }
+
+        // African & other language triggers
+        if (lower.includes("luganda") || lower.includes("uganda")) return LANGUAGES["lg"];
+        if (lower.includes("yoruba")) return LANGUAGES["yo"];
+        if (lower.includes("hausa")) return LANGUAGES["ha"];
+        if (lower.includes("igbo")) return LANGUAGES["ig"];
+
+        return LANGUAGES["en"];
     }
 
     function showResult(staff, langCfg) {
@@ -491,7 +519,7 @@ KIOSK_HTML = r"""
             const last = event.results[event.results.length - 1];
             if (last.isFinal && isWakeWord(normalize(last[0].transcript))) {
                 try { wakeRecognition.stop(); } catch (e) {}
-                startLanguageSelection();
+                startNameCaptureDirect();
             }
         };
 
@@ -512,37 +540,27 @@ KIOSK_HTML = r"""
         if (activeRecognition) { try { activeRecognition.stop(); } catch (e) {} try { activeRecognition.abort(); } catch (e) {} }
     }
 
-    // Step 1: Ask for language first (Deterministic flow)
-    const LANG_PROMPT_TEXT = "Please tell me your language. Say: English, Urdu, Hindi, Tamil, Malayalam, Amharic, Yoruba, Hausa, Igbo, or Luganda.";
+    // Direct Name Capture — NO language selection prompt at all!
+    const NAME_PROMPT_TEXT = "Tell me your login or name.";
 
-    function startLanguageSelection() {
-        state = "choosing_lang";
+    function startNameCaptureDirect() {
+        state = "awaiting_id";
         bgVideo.volume = LISTENING_VIDEO_VOLUME;
-        setPill("Which language would you like?", "Say: English, Urdu, Hindi, Tamil...");
+        setPill("Tell me your login or name", "Listening...");
 
         let started = false;
         function begin() {
-            if (started || state !== "choosing_lang") return;
+            if (started || state !== "awaiting_id") return;
             started = true;
-            listenForLanguageChoice();
+            listenForNameDirect();
         }
-        speak(LANG_PROMPT_TEXT, "en-US", begin);
-        setTimeout(begin, 4500);
+        speak(NAME_PROMPT_TEXT, "en-US", begin);
+        setTimeout(begin, 3500);
     }
 
-    function detectLanguageChoice(transcript) {
-        const t = normalize(transcript);
-        for (const lang of LANGUAGES) {
-            if (lang.keywords.some(kw => t.includes(kw))) {
-                return lang;
-            }
-        }
-        return null;
-    }
-
-    function listenForLanguageChoice() {
-        if (state !== "choosing_lang") return;
-        debugCaption.textContent = "Listening for language name...";
+    function listenForNameDirect() {
+        if (state !== "awaiting_id") return;
+        debugCaption.textContent = "Listening for name or login...";
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         activeRecognition = new SpeechRecognition();
@@ -561,70 +579,15 @@ KIOSK_HTML = r"""
             const last = event.results[event.results.length - 1];
             if (last.isFinal) {
                 gotFinal = true;
-                const chosenLang = detectLanguageChoice(last[0].transcript);
-                if (chosenLang) {
-                    startNameCapture(chosenLang);
-                } else {
-                    // Default fallback to English if not recognized
-                    startNameCapture(LANGUAGES[0]);
-                }
-            }
-        };
-        activeRecognition.onerror = function () {};
-        activeRecognition.onend = function () {
-            if (state === "choosing_lang" && !gotFinal) {
-                startNameCapture(LANGUAGES[0]); // Default to English on timeout
-            }
-        };
+                const transcriptText = last[0].transcript;
+                const staff = findStaff(transcriptText);
+                const detectedLang = detectLanguageFromTranscript(transcriptText);
 
-        try { activeRecognition.start(); } catch (e) {
-            setTimeout(() => startNameCapture(LANGUAGES[0]), 500);
-        }
-    }
-
-    // Step 2: Listen for name/login in the selected language
-    function startNameCapture(langCfg) {
-        state = "awaiting_id";
-        bgVideo.volume = LISTENING_VIDEO_VOLUME;
-        setPill("Kindly tell me your login or name", "Listening (" + langCfg.label + ")...");
-
-        let started = false;
-        function begin() {
-            if (started || state !== "awaiting_id") return;
-            started = true;
-            listenForName(langCfg);
-        }
-        speak(langCfg.prompt, langCfg.code, begin);
-        setTimeout(begin, 3500);
-    }
-
-    function listenForName(langCfg) {
-        if (state !== "awaiting_id") return;
-        debugCaption.textContent = "Listening (" + langCfg.label + ")...";
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        activeRecognition = new SpeechRecognition();
-        activeRecognition.continuous = false;
-        activeRecognition.interimResults = true;
-        activeRecognition.lang = langCfg.code; // Locked strictly to chosen language
-        activeRecognition.maxAlternatives = 1;
-
-        let gotFinal = false;
-
-        activeRecognition.onresult = function (event) {
-            let liveText = "";
-            for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
-            debugCaption.textContent = "Heard (" + langCfg.label + "): " + liveText;
-
-            const last = event.results[event.results.length - 1];
-            if (last.isFinal) {
-                gotFinal = true;
-                const staff = findStaff(last[0].transcript);
                 if (staff) {
-                    showResult(staff, langCfg);
+                    showResult(staff, detectedLang);
                 } else {
                     setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
-                    speak(langCfg.sorry, langCfg.code);
+                    speak(detectedLang.sorry, detectedLang.code);
                     clearTimeout(resetTimer);
                     resetTimer = setTimeout(resetToIdle, 2500);
                 }
@@ -634,7 +597,7 @@ KIOSK_HTML = r"""
         activeRecognition.onend = function () {
             if (state === "awaiting_id" && !gotFinal) {
                 setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
-                speak(langCfg.sorry, langCfg.code);
+                speak(LANGUAGES["en"].sorry, LANGUAGES["en"].code);
                 clearTimeout(resetTimer);
                 resetTimer = setTimeout(resetToIdle, 2500);
             }
