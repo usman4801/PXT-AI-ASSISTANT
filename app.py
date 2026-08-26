@@ -423,7 +423,6 @@ KIOSK_HTML = r"""
     // its lang code may need to be swapped for a closer regional variant.
 
     let state = "idle"; // idle | awaiting_id | result
-    let langIndex = 0;
     let nameRecognition = null;
     let nameCycleTimer = null;
     let nameCycleDeadline = 0;
@@ -573,7 +572,7 @@ KIOSK_HTML = r"""
             const last = event.results[event.results.length - 1];
             if (last.isFinal && isWakeWord(normalize(last[0].transcript))) {
                 try { wakeRecognition.stop(); } catch (e) {}
-                startNameCapture();
+                startLanguageSelection();
             }
         };
 
@@ -590,53 +589,66 @@ KIOSK_HTML = r"""
         }, 4000);
     }
 
-    // ---- Name/login capture: cycles through LANGUAGES until a match -------
-    function startNameCapture() {
-        state = "awaiting_id";
-        langIndex = 0;
-        bgVideo.volume = LISTENING_VIDEO_VOLUME;
-        const first = LANGUAGES[0];
-        setPill("Kindly tell me your login or name", "Listening...");
-
-        // speechSynthesis's "onend" event is unreliable inside iframes/kiosk
-        // browsers — it can simply never fire, which used to freeze the whole
-        // kiosk (mic never restarted). We now start listening on a fixed
-        // fallback timer regardless of whether TTS reports finishing.
-        let cycleStarted = false;
-        function beginCycle() {
-            if (cycleStarted || state !== "awaiting_id") return;
-            cycleStarted = true;
-            nameCycleDeadline = Date.now() + LANGUAGES.length * 4000;
-            tryNameLanguage(0);
-        }
-        speak(first.prompt, first.code, beginCycle);
-        setTimeout(beginCycle, 3500); // safety net if TTS onend never fires
-    }
-
     function stopNameCapture() {
         clearTimeout(nameCycleTimer);
         if (nameRecognition) { try { nameRecognition.stop(); } catch (e) {} try { nameRecognition.abort(); } catch (e) {} }
     }
 
-    function tryNameLanguage(idx) {
-        if (state !== "awaiting_id") return;
-        if (Date.now() > nameCycleDeadline) {
-            setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
-            speak(LANGUAGES[0].sorry, LANGUAGES[0].code);
-            clearTimeout(resetTimer);
-            resetTimer = setTimeout(resetToIdle, 2500);
-            return;
-        }
+    // ---- Step 1: ask which language the employee wants to continue in -----
+    // Guessing the language by cycling through recognizers (old approach) was
+    // unreliable: Chrome's English recognizer can transcribe Urdu/Hindi speech
+    // into surprisingly accurate Roman-script text, so it would "correctly"
+    // match the employee's name on the English pass even though they spoke a
+    // different language — giving a confidently wrong-language reply. Asking
+    // explicitly removes that guesswork entirely.
+    const LANGUAGE_KEYWORDS = [
+        { idx: 0, words: ["english"] },
+        { idx: 1, words: ["urdu"] },
+        { idx: 2, words: ["hindi"] },
+        { idx: 3, words: ["tamil"] },
+        { idx: 4, words: ["malayalam", "malayali"] },
+        { idx: 5, words: ["amharic", "ethiopian", "ethiopia"] },
+        { idx: 6, words: ["yoruba"] },
+        { idx: 7, words: ["hausa"] },
+        { idx: 8, words: ["igbo"] },
+        { idx: 9, words: ["luganda", "uganda", "ganda"] }
+    ];
+    const LANG_PROMPT = "Please tell me your language. Say: English, Urdu, Hindi, Tamil, Malayalam, Amharic, Yoruba, Hausa, Igbo, or Luganda.";
+    let langSelectAttempts = 0;
 
-        langIndex = idx % LANGUAGES.length;
-        const cfg = LANGUAGES[langIndex];
-        debugCaption.textContent = "Listening (" + cfg.label + ")...";
+    function detectLanguageChoice(transcript) {
+        const t = normalize(transcript);
+        for (const entry of LANGUAGE_KEYWORDS) {
+            if (entry.words.some(w => t.includes(w))) return LANGUAGES[entry.idx];
+        }
+        return null;
+    }
+
+    function startLanguageSelection() {
+        state = "choosing_lang";
+        langSelectAttempts = 0;
+        bgVideo.volume = LISTENING_VIDEO_VOLUME;
+        setPill("Which language would you like?", "Say: English, Urdu, Hindi, Tamil, Malayalam...");
+
+        let started = false;
+        function begin() {
+            if (started || state !== "choosing_lang") return;
+            started = true;
+            listenForLanguageChoice();
+        }
+        speak(LANG_PROMPT, "en-US", begin);
+        setTimeout(begin, 4500); // fallback if TTS onend never fires
+    }
+
+    function listenForLanguageChoice() {
+        if (state !== "choosing_lang") return;
+        debugCaption.textContent = "Listening for language...";
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         nameRecognition = new SpeechRecognition();
         nameRecognition.continuous = false;
         nameRecognition.interimResults = true;
-        nameRecognition.lang = cfg.code;
+        nameRecognition.lang = "en-US"; // language NAMES are said in English regardless of chosen language
         nameRecognition.maxAlternatives = 1;
 
         let gotFinal = false;
@@ -644,34 +656,103 @@ KIOSK_HTML = r"""
         nameRecognition.onresult = function (event) {
             let liveText = "";
             for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
-            debugCaption.textContent = "Heard (" + cfg.label + "): " + liveText;
+            debugCaption.textContent = "Heard: " + liveText;
 
             const last = event.results[event.results.length - 1];
             if (last.isFinal) {
                 gotFinal = true;
-                const confidence = last[0].confidence; // 0..1, or 0/undefined if browser doesn't report it
-                const staff = findStaff(last[0].transcript);
-                // Reject low-confidence "accidental" matches — garbled cross-language
-                // phonetic overlap (e.g. Urdu speech vaguely resembling a Latin name)
-                // tends to score low. This lets the correct-language pass win instead
-                // of an early false positive stealing the match in the wrong language.
-                const confidentEnough = !confidence || confidence >= 0.4;
-                if (staff && confidentEnough) {
-                    showResult(staff, cfg);
+                const chosen = detectLanguageChoice(last[0].transcript);
+                if (chosen) {
+                    startNameCapture(chosen);
                 } else {
-                    nameCycleTimer = setTimeout(function () { tryNameLanguage(langIndex + 1); }, 200);
+                    langSelectAttempts++;
+                    if (langSelectAttempts >= 3) {
+                        // Give up asking — default to English rather than loop forever.
+                        startNameCapture(LANGUAGES[0]);
+                    } else {
+                        nameCycleTimer = setTimeout(listenForLanguageChoice, 300);
+                    }
+                }
+            }
+        };
+        nameRecognition.onerror = function () { /* handled by onend */ };
+        nameRecognition.onend = function () {
+            if (state === "choosing_lang" && !gotFinal) {
+                langSelectAttempts++;
+                if (langSelectAttempts >= 3) {
+                    startNameCapture(LANGUAGES[0]);
+                } else {
+                    nameCycleTimer = setTimeout(listenForLanguageChoice, 200);
+                }
+            }
+        };
+
+        try { nameRecognition.start(); } catch (e) {
+            nameCycleTimer = setTimeout(listenForLanguageChoice, 300);
+        }
+    }
+
+    // ---- Step 2: listen for name/login in exactly the chosen language -----
+    function startNameCapture(langCfg) {
+        state = "awaiting_id";
+        bgVideo.volume = LISTENING_VIDEO_VOLUME;
+        setPill("Kindly tell me your login or name", "Listening (" + langCfg.label + ")...");
+
+        let started = false;
+        function begin() {
+            if (started || state !== "awaiting_id") return;
+            started = true;
+            listenForName(langCfg);
+        }
+        speak(langCfg.prompt, langCfg.code, begin);
+        setTimeout(begin, 3500); // fallback if TTS onend never fires
+    }
+
+    function listenForName(langCfg) {
+        if (state !== "awaiting_id") return;
+        debugCaption.textContent = "Listening (" + langCfg.label + ")...";
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        nameRecognition = new SpeechRecognition();
+        nameRecognition.continuous = false;
+        nameRecognition.interimResults = true;
+        nameRecognition.lang = langCfg.code;
+        nameRecognition.maxAlternatives = 1;
+
+        let gotFinal = false;
+
+        nameRecognition.onresult = function (event) {
+            let liveText = "";
+            for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
+            debugCaption.textContent = "Heard (" + langCfg.label + "): " + liveText;
+
+            const last = event.results[event.results.length - 1];
+            if (last.isFinal) {
+                gotFinal = true;
+                const staff = findStaff(last[0].transcript);
+                if (staff) {
+                    showResult(staff, langCfg);
+                } else {
+                    setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
+                    speak(langCfg.sorry, langCfg.code);
+                    clearTimeout(resetTimer);
+                    resetTimer = setTimeout(resetToIdle, 2500);
                 }
             }
         };
         nameRecognition.onerror = function () { /* handled by onend */ };
         nameRecognition.onend = function () {
             if (state === "awaiting_id" && !gotFinal) {
-                nameCycleTimer = setTimeout(function () { tryNameLanguage(langIndex + 1); }, 150);
+                setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
+                speak(langCfg.sorry, langCfg.code);
+                clearTimeout(resetTimer);
+                resetTimer = setTimeout(resetToIdle, 2500);
             }
         };
 
         try { nameRecognition.start(); } catch (e) {
-            nameCycleTimer = setTimeout(function () { tryNameLanguage(langIndex + 1); }, 300);
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(resetToIdle, 500);
         }
     }
 
