@@ -1,5 +1,6 @@
 """
-PXT HUB - AI Voice Assistant (Edge-to-Edge True Fullscreen UI)
+PXT HUB - Clean Full Screen Video Kiosk
+Flow: Full screen video -> Say "Hi PXT" -> Ask Badge No -> Show Status -> Auto Reset
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-# ---- Optional dependencies ----
+# ---- Audio / Voice Dependencies ----
 try:
     from streamlit_mic_recorder import speech_to_text
     MIC_AVAILABLE = True
@@ -29,559 +30,300 @@ except ImportError:
 # ============================================================
 # CONFIGURATION
 # ============================================================
-APP_TITLE = "PXT HUB"
 DATA_FILE = "staff_data.csv"
-ADMIN_PASSWORD = "pxt123"
-REQUIRED_COLUMNS = ["EmployeeID", "Name", "Status", "RemainingLeaves", "NextOffDay", "Aliases"]
-RESET_DELAY_SECONDS = 7
+RESET_DELAY = 8  # 8 seconds baad auto-reset
 VIDEO_URL = "https://raw.githubusercontent.com/usman4801/PXT-AI-ASSISTANT/main/banner.mp4"
 
-LANGUAGE_OPTIONS = {
-    "Hindi / Urdu": "hi-IN",
-    "English": "en"
-}
-
-# MUST BE WIDE FOR FULLSCREEN
 st.set_page_config(
-    page_title=f"{APP_TITLE} - AI Assistant",
-    page_icon="🎙️",
+    page_title="PXT HUB",
+    page_icon="🤖",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 
 # ============================================================
-# CSS STYLING (TRUE EDGE-TO-EDGE FULLSCREEN)
+# 100% TRUE FULLSCREEN CSS (ZERO BORDERS / NO EXTRA TEXT)
 # ============================================================
-def inject_custom_css() -> None:
-    st.markdown(
-        """
-        <style>
-            /* 1. Streamlit headers & chrome remove */
-            #MainMenu, header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"] {
-                display: none !important;
-                visibility: hidden !important;
-            }
-            [data-testid="collapsedControl"] {
-                opacity: 0.15;
-                transition: opacity 0.3s ease;
-            }
-            [data-testid="collapsedControl"]:hover {
-                opacity: 1;
-            }
+st.markdown(
+    f"""
+    <style>
+        /* Streamlit UI elements hide */
+        #MainMenu, header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], [data-testid="collapsedControl"] {{
+            display: none !important;
+            visibility: hidden !important;
+        }}
 
-            /* 2. Global Dark Stage & ZERO Padding for full stretch */
-            html, body, [data-testid="stAppViewContainer"], .stApp {
-                background: #03060f !important;
-                color: #ffffff !important;
-                font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-                overflow-x: hidden !important;
-            }
+        /* Full black viewport without scroll */
+        html, body, [data-testid="stAppViewContainer"], .stApp {{
+            background: #000000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            height: 100vh !important;
+            width: 100vw !important;
+        }}
 
-            /* REMOVE ALL STREAMLIT MAX-WIDTH & SIDE PADDINGS */
-            .main, [data-testid="stAppViewContainer"] > .main {
-                padding: 0 !important;
-            }
-            .main .block-container {
-                max-width: 100% !important;
-                width: 100% !important;
-                padding-top: 1rem !important;
-                padding-bottom: 2rem !important;
-                padding-left: 2vw !important;
-                padding-right: 2vw !important;
-                margin: 0 !important;
-            }
+        .main, .main .block-container {{
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100vw !important;
+            width: 100vw !important;
+            height: 100vh !important;
+        }}
 
-            /* 3. Title */
-            .pxt-title {
-                text-align: center;
-                font-size: 2.2rem;
-                font-weight: 900;
-                letter-spacing: 0.22em;
-                color: #ffffff;
-                text-transform: uppercase;
-                margin-top: 0.5rem;
-                margin-bottom: 1rem;
-                text-shadow: 0 0 16px rgba(56, 189, 248, 0.8), 0 0 35px rgba(56, 189, 248, 0.4);
-            }
+        /* TRUE EDGE-TO-EDGE BACKGROUND VIDEO */
+        #bg-video {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 1;
+        }}
 
-            /* 4. TRUE FULLSCREEN VIDEO BANNER */
-            .video-frame-wrap {
-                width: 96vw;
-                max-width: 1400px;
-                margin: 0 auto 1.4rem auto;
-                border-radius: 26px;
-                overflow: hidden;
-                border: 2px solid rgba(56, 189, 248, 0.5);
-                box-shadow: 0 0 45px rgba(56, 189, 248, 0.35), 0 15px 40px rgba(0, 0, 0, 0.85);
-                background: #000000;
-            }
+        /* FLOATING INTERACTIVE OVERLAY */
+        .kiosk-overlay {{
+            position: fixed;
+            bottom: 4vh;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 999;
+            width: 90%;
+            max-width: 520px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }}
 
-            .video-frame-wrap video {
-                width: 100%;
-                height: 52vh;
-                min-height: 380px;
-                display: block;
-                object-fit: cover;
-            }
+        /* FLOATING GLASS RESULT CARD */
+        .glass-card {{
+            background: rgba(10, 15, 29, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1.5px solid rgba(56, 189, 248, 0.4);
+            border-radius: 20px;
+            padding: 1.5rem;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(56, 189, 248, 0.3);
+            animation: fadeIn 0.3s ease-out;
+        }}
 
-            /* 5. Status Pill */
-            .pill-wrapper {
-                text-align: center;
-                margin-bottom: 1.2rem;
-            }
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(15px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
 
-            .status-pill {
-                display: inline-flex;
-                align-items: center;
-                gap: 10px;
-                padding: 0.45rem 1.6rem;
-                border-radius: 999px;
-                background: rgba(15, 23, 42, 0.85);
-                border: 1px solid rgba(56, 189, 248, 0.4);
-                box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
-                font-size: 0.92rem;
-                font-weight: 600;
-                color: #cbebff;
-                letter-spacing: 0.03em;
-            }
+        .card-name {{
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: #ffffff;
+        }}
+        .card-badge {{
+            color: #38bdf8;
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
+            letter-spacing: 0.05em;
+        }}
 
-            .status-dot {
-                width: 9px;
-                height: 9px;
-                border-radius: 50%;
-                background: #38bdf8;
-                box-shadow: 0 0 12px #38bdf8;
-                animation: pulseGlow 1.5s infinite ease-in-out;
-            }
+        .stats-grid {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }}
+        .stat-cell {{
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 0.7rem 0.3rem;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }}
+        .stat-lbl {{
+            font-size: 0.68rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+        }}
+        .stat-val {{
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-top: 4px;
+        }}
+        .status-present {{ color: #34d399; }}
+        .status-leave {{ color: #fb923c; }}
 
-            @keyframes pulseGlow {
-                0%, 100% { transform: scale(1); opacity: 0.7; }
-                50% { transform: scale(1.4); opacity: 1; }
-            }
+        /* INPUT CONTROLS */
+        div[data-testid="stTextInput"] {{
+            width: 100% !important;
+        }}
+        div[data-testid="stTextInput"] input {{
+            background: rgba(15, 23, 42, 0.9) !important;
+            border: 1.5px solid rgba(56, 189, 248, 0.5) !important;
+            border-radius: 14px !important;
+            color: #ffffff !important;
+            height: 3.2rem;
+            font-size: 1.1rem !important;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }}
+        div[data-testid="stTextInput"] input:focus {{
+            border-color: #38bdf8 !important;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.5) !important;
+        }}
 
-            /* 6. Controls Center Container */
-            .controls-container {
-                max-width: 720px;
-                margin: 0 auto;
-            }
+        /* MIC BUTTON */
+        .stButton > button {{
+            background: rgba(15, 23, 42, 0.9) !important;
+            border: 1.5px solid rgba(56, 189, 248, 0.5) !important;
+            border-radius: 999px !important;
+            color: #ffffff !important;
+            height: 3rem !important;
+            padding: 0 1.8rem !important;
+            font-weight: 700;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }}
+        .stButton > button:hover {{
+            border-color: #38bdf8 !important;
+            color: #38bdf8 !important;
+        }}
+    </style>
 
-            /* 7. Radio Buttons */
-            div[role="radiogroup"] {
-                justify-content: center !important;
-                margin-bottom: 1rem !important;
-                gap: 2rem !important;
-            }
-
-            div[role="radiogroup"] label {
-                color: #cbd5e1 !important;
-                font-size: 1rem !important;
-            }
-
-            /* 8. Search Input & Buttons */
-            div[data-testid="stTextInput"] input {
-                background: rgba(15, 23, 42, 0.85) !important;
-                border: 1.5px solid rgba(56, 189, 248, 0.4) !important;
-                border-radius: 16px !important;
-                color: #ffffff !important;
-                height: 3.3rem;
-                font-size: 1.05rem !important;
-                padding-left: 1.2rem !important;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            }
-
-            div[data-testid="stTextInput"] input:focus {
-                border-color: #38bdf8 !important;
-                box-shadow: 0 0 20px rgba(56, 189, 248, 0.5) !important;
-            }
-
-            .stButton > button {
-                background: #1e293b !important;
-                border: 1.5px solid rgba(56, 189, 248, 0.45) !important;
-                border-radius: 16px !important;
-                color: #ffffff !important;
-                height: 3.3rem !important;
-                font-weight: 700;
-                font-size: 1rem;
-                transition: all 0.2s ease;
-            }
-
-            .stButton > button:hover {
-                border-color: #38bdf8 !important;
-                box-shadow: 0 0 20px rgba(56, 189, 248, 0.5) !important;
-                color: #38bdf8 !important;
-            }
-
-            /* 9. Employee Result Card */
-            .result-card {
-                background: rgba(15, 23, 42, 0.88);
-                backdrop-filter: blur(20px);
-                -webkit-backdrop-filter: blur(20px);
-                border: 1.5px solid rgba(56, 189, 248, 0.45);
-                border-radius: 22px;
-                padding: 1.6rem 2.2rem;
-                margin: 1.2rem auto;
-                max-width: 620px;
-                text-align: center;
-                box-shadow: 0 20px 45px rgba(0, 0, 0, 0.7), 0 0 30px rgba(56, 189, 248, 0.25);
-            }
-
-            .card-name {
-                font-size: 1.8rem;
-                font-weight: 800;
-                color: #ffffff;
-            }
-
-            .card-id {
-                color: #94a3b8;
-                font-size: 0.9rem;
-                letter-spacing: 0.08em;
-                margin-bottom: 1.1rem;
-            }
-
-            .stats-row {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 0.9rem;
-                margin-top: 0.9rem;
-            }
-
-            .stat-box {
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 14px;
-                padding: 0.8rem 0.5rem;
-            }
-
-            .stat-lbl {
-                font-size: 0.72rem;
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                color: #94a3b8;
-                margin-bottom: 0.25rem;
-            }
-
-            .stat-val {
-                font-size: 1.2rem;
-                font-weight: 700;
-            }
-
-            .status-present { color: #34d399; }
-            .status-leave { color: #fb923c; }
-            .status-other { color: #38bdf8; }
-
-            /* 10. Bottom Helper Text */
-            .guide-wrap {
-                text-align: center;
-                margin-top: 1.4rem;
-                margin-bottom: 1rem;
-            }
-
-            .guide-main {
-                font-size: 1.3rem;
-                font-weight: 700;
-                color: #f8fafc;
-                margin-bottom: 0.35rem;
-            }
-
-            .guide-sub {
-                font-size: 0.92rem;
-                color: #94a3b8;
-            }
-
-            audio {
-                width: 100%;
-                margin-top: 0.8rem;
-                border-radius: 12px;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def inject_auto_reset(delay_seconds: float) -> None:
-    components.html(
-        f"""
-        <script>
-            setTimeout(function() {{
-                try {{ window.parent.location.reload(); }} catch (e) {{}}
-            }}, {int(delay_seconds * 1000)});
-        </script>
-        """,
-        height=0,
-    )
+    <video id="bg-video" autoplay loop muted playsinline>
+        <source src="{VIDEO_URL}" type="video/mp4">
+    </video>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # ============================================================
-# DATA FUNCTIONS
+# DATA & SPEECH LOGIC
 # ============================================================
-def _demo_data() -> pd.DataFrame:
-    return pd.DataFrame([
-        {"EmployeeID": "EMP001", "Name": "Ayesha Khan", "Status": "Present", "RemainingLeaves": "12", "NextOffDay": "Saturday", "Aliases": "Ayesha|Khan"},
-        {"EmployeeID": "EMP002", "Name": "Bilal Ahmed", "Status": "On Leave", "RemainingLeaves": "5", "NextOffDay": "Sunday", "Aliases": "Bilal"},
-        {"EmployeeID": "EMP011", "Name": "Usman", "Status": "Present", "RemainingLeaves": "20", "NextOffDay": "Friday", "Aliases": "Usman|EMP011"},
-    ])
-
-@st.cache_data(show_spinner=False)
-def load_staff_data(file_path: str, mtime: float | None) -> pd.DataFrame:
-    if os.path.exists(file_path):
+def load_data():
+    if os.path.exists(DATA_FILE):
         try:
-            df = pd.read_csv(file_path, dtype=str).fillna("")
-            missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
-            if not missing:
-                return df[REQUIRED_COLUMNS].copy()
+            return pd.read_csv(DATA_FILE, dtype=str).fillna("")
         except Exception:
             pass
-    return _demo_data()
+    return pd.DataFrame([
+        {"EmployeeID": "EMP001", "Name": "Ayesha Khan", "Status": "Present", "RemainingLeaves": "12", "NextOffDay": "Saturday"},
+        {"EmployeeID": "EMP002", "Name": "Bilal Ahmed", "Status": "On Leave", "RemainingLeaves": "5", "NextOffDay": "Sunday"},
+        {"EmployeeID": "EMP011", "Name": "Usman", "Status": "Present", "RemainingLeaves": "20", "NextOffDay": "Friday"},
+    ])
 
-def get_file_mtime(file_path: str):
-    return os.path.getmtime(file_path) if os.path.exists(file_path) else None
-
-def save_staff_data(uploaded_file) -> tuple[bool, str]:
-    try:
-        df = pd.read_csv(uploaded_file, dtype=str).fillna("")
-        missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
-        if missing:
-            return False, f"Missing columns: {missing}"
-        df[REQUIRED_COLUMNS].to_csv(DATA_FILE, index=False)
-        return True, f"Saved {len(df)} records successfully."
-    except Exception as e:
-        return False, f"Error: {e}"
-
-def search_staff(df: pd.DataFrame, query: str) -> pd.DataFrame:
-    if not query or not query.strip():
-        return pd.DataFrame(columns=df.columns)
-    q = query.strip().lower()
-
-    def matches(row):
-        if q in str(row["EmployeeID"]).lower() or q in str(row["Name"]).lower():
-            return True
-        aliases = [a.strip().lower() for a in str(row.get("Aliases", "")).split("|") if a.strip()]
-        return any(q in a for a in aliases)
-
-    return df[df.apply(matches, axis=1)]
-
-
-# ============================================================
-# VOICE OUTPUT
-# ============================================================
-def generate_speech(text: str, lang_code: str = "hi"):
+def speak(text):
     if not TTS_AVAILABLE:
-        return None
+        return
     try:
         buf = io.BytesIO()
-        gTTS(text=text, lang=lang_code).write_to_fp(buf)
+        gTTS(text=text, lang="en").write_to_fp(buf)
         buf.seek(0)
-        return buf
+        st.audio(buf, format="audio/mp3", autoplay=True)
     except Exception:
-        return None
+        pass
 
-def build_spoken_response(row, lang_choice: str) -> tuple[str, str]:
-    name = row['Name']
-    status = row['Status']
-    leaves = row['RemainingLeaves']
-    off_day = row['NextOffDay']
+# States
+if "state" not in st.session_state:
+    st.session_state.state = "idle"  # idle -> asked_badge -> showing_result
+if "matched_employee" not in st.session_state:
+    st.session_state.matched_employee = None
+if "result_time" not in st.session_state:
+    st.session_state.result_time = None
 
-    if lang_choice == "Hindi / Urdu":
-        text = f"Namaste {name}. Aapka status {status} hai. Aapke paas {leaves} chuttiyan baqi hain, aur agla off {off_day} ko hai."
-        return text, "hi"
-    else:
-        text = f"Hello {name}. Your current status is {status}. You have {leaves} leaves remaining, and your next off day is {off_day}."
-        return text, "en"
+# Auto Reset check
+if st.session_state.result_time and (time.time() - st.session_state.result_time > RESET_DELAY):
+    st.session_state.state = "idle"
+    st.session_state.matched_employee = None
+    st.session_state.result_time = None
+    st.rerun()
 
-def get_status_class(status: str) -> str:
-    s = str(status).lower()
-    if "present" in s:
-        return "status-present"
-    if "leave" in s or "off" in s:
-        return "status-leave"
-    return "status-other"
-
-
-# State variables
-defaults = {
-    "prefill_query": "",
-    "reset_counter": 0,
-    "input_source": None,
-    "active_lang": "Hindi / Urdu",
-    "result_shown_at": None,
-    "last_shown_query": None,
-    "admin_authenticated": False,
-}
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
-
-inject_custom_css()
-
-# Auto-reset logic
-if st.session_state.result_shown_at and (time.time() - st.session_state.result_shown_at) > RESET_DELAY_SECONDS:
-    st.session_state.prefill_query = ""
-    st.session_state.reset_counter += 1
-    st.session_state.result_shown_at = None
-    st.session_state.last_shown_query = None
-    st.session_state.input_source = None
+staff_df = load_data()
 
 
 # ============================================================
-# ADMIN SIDEBAR
+# INTERFACE LOGIC
 # ============================================================
-with st.sidebar:
-    st.markdown("### 🔒 Kiosk Admin")
-    if not st.session_state.admin_authenticated:
-        with st.expander("Admin Login", expanded=False):
-            pwd = st.text_input("Password", type="password", key="admin_pwd_box")
-            if st.button("Unlock Admin", use_container_width=True):
-                if pwd == ADMIN_PASSWORD:
-                    st.session_state.admin_authenticated = True
-                    st.rerun()
-                else:
-                    st.error("Incorrect password")
+st.markdown('<div class="kiosk-overlay">', unsafe_allow_html=True)
+
+# 1. IDLE STATE: Only Full Screen Video + Mic trigger
+if st.session_state.state == "idle":
+    if MIC_AVAILABLE:
+        spoken = speech_to_text(
+            language="en-US",
+            start_prompt="🎙️ Say 'Hi PXT'",
+            stop_prompt="⏹️ Listening...",
+            just_once=True,
+            key="idle_mic",
+        )
+        if spoken:
+            if "pxt" in spoken.lower() or "hi" in spoken.lower():
+                st.session_state.state = "asked_badge"
+                speak("Hello! Please enter or say your Badge Number.")
+                st.rerun()
     else:
-        st.success("Admin Active")
-        if st.button("Logout", use_container_width=True):
-            st.session_state.admin_authenticated = False
+        # Fallback button agar mic library na ho
+        if st.button("🎙️ Tap to Start"):
+            st.session_state.state = "asked_badge"
+            speak("Hello! Please enter your Badge Number.")
             st.rerun()
 
-        st.divider()
-        uploaded = st.file_uploader("Upload CSV", type=["csv"])
-        if uploaded and st.button("Save Data", use_container_width=True):
-            ok, msg = save_staff_data(uploaded)
-            if ok:
-                st.success(msg)
-                load_staff_data.clear()
-                st.rerun()
-            else:
-                st.error(msg)
-
-        st.divider()
-        curr_df = load_staff_data(DATA_FILE, get_file_mtime(DATA_FILE))
-        st.dataframe(curr_df, use_container_width=True, hide_index=True)
-
-
-# ============================================================
-# MAIN FOREGROUND VIEW
-# ============================================================
-staff_df = load_staff_data(DATA_FILE, get_file_mtime(DATA_FILE))
-
-# 1. PXT HUB Title
-st.markdown(f'<div class="pxt-title">{APP_TITLE}</div>', unsafe_allow_html=True)
-
-# 2. FULLSCREEN STRETCHED VIDEO BANNER
-st.markdown(
-    f"""
-    <div class="video-frame-wrap">
-        <video autoplay loop muted playsinline>
-            <source src="{VIDEO_URL}" type="video/mp4">
-        </video>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-# 3. Status Pill
-if st.session_state.input_source == "voice":
-    pill_text = f"Listening... Heard: {st.session_state.active_lang}"
-elif st.session_state.input_source == "text":
-    pill_text = "Searching Employee Record..."
-else:
-    pill_text = 'Listening... say "Hi PXT" or tap Speak'
-
-st.markdown(
-    f"""
-    <div class="pill-wrapper">
-        <span class="status-pill"><span class="status-dot"></span>{pill_text}</span>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-# 4. Center Controls Container
-st.markdown('<div class="controls-container">', unsafe_allow_html=True)
-
-# Language Selector
-selected_lang = st.radio(
-    "Language",
-    list(LANGUAGE_OPTIONS.keys()),
-    horizontal=True,
-    label_visibility="collapsed",
-    key="lang_radio_select",
-)
-st.session_state.active_lang = selected_lang
-
-# Search Controls
-reset_idx = st.session_state.reset_counter
-col_input, col_speak = st.columns([4, 1])
-
-with col_input:
-    text_val = st.text_input(
-        "Search Query",
-        value=st.session_state.prefill_query,
-        placeholder="Type a name, Employee ID, or speak...",
+# 2. ASKED BADGE STATE: Input box opens for Badge No
+elif st.session_state.state == "asked_badge":
+    badge_input = st.text_input(
+        "badge_input",
+        placeholder="Enter Badge No / Employee ID (e.g. EMP011)",
         label_visibility="collapsed",
-        key=f"query_box_{reset_idx}",
+        key="badge_box",
     )
 
-with col_speak:
-    spoken_result = None
     if MIC_AVAILABLE:
-        spoken_result = speech_to_text(
-            language=LANGUAGE_OPTIONS[selected_lang],
-            start_prompt="🎤 Speak",
+        badge_voice = speech_to_text(
+            language="en-US",
+            start_prompt="🎙️ Or Speak Badge No",
             stop_prompt="⏹️ Done",
             just_once=True,
-            use_container_width=True,
-            key=f"mic_btn_{reset_idx}",
+            key="badge_mic",
         )
-    else:
-        st.button("🎤 Speak", disabled=True, use_container_width=True)
+        if badge_voice:
+            badge_input = badge_voice
 
-st.markdown('</div>', unsafe_allow_html=True)
+    if badge_input:
+        q = badge_input.strip().lower()
+        match = staff_df[staff_df["EmployeeID"].str.lower() == q]
+        if match.empty:
+            match = staff_df[staff_df["Name"].str.lower().str.contains(q)]
 
-# Input event triggers
-if spoken_result:
-    st.session_state.prefill_query = spoken_result
-    st.session_state.input_source = "voice"
-    st.session_state.reset_counter += 1
-    st.rerun()
+        if not match.empty:
+            st.session_state.matched_employee = match.iloc[0]
+            st.session_state.state = "showing_result"
+            st.session_state.result_time = time.time()
+            st.rerun()
+        else:
+            st.error("Badge Number not found. Try again.")
 
-if text_val and text_val != st.session_state.prefill_query:
-    st.session_state.prefill_query = text_val
-    st.session_state.input_source = "text"
-    st.rerun()
+# 3. SHOWING RESULT STATE: Clean Glass Card + Voice Answer
+elif st.session_state.state == "showing_result":
+    emp = st.session_state.matched_employee
+    status_cls = "status-present" if "present" in emp["Status"].lower() else "status-leave"
 
-
-# 5. Results & Data Card Display
-active_query = st.session_state.prefill_query
-results = search_staff(staff_df, active_query) if (active_query and active_query.strip()) else pd.DataFrame()
-
-if not results.empty:
-    if st.session_state.last_shown_query != active_query:
-        st.session_state.result_shown_at = time.time()
-        st.session_state.last_shown_query = active_query
-
-    staff_member = results.iloc[0]
-    status_cls = get_status_class(staff_member["Status"])
-
-    # Show Glass Card
     st.markdown(
         f"""
-        <div class="result-card">
-            <div class="card-name">{staff_member['Name']}</div>
-            <div class="card-id">{staff_member['EmployeeID']}</div>
-            <div class="stats-row">
-                <div class="stat-box">
+        <div class="glass-card">
+            <div class="card-name">{emp['Name']}</div>
+            <div class="card-badge">Badge No: {emp['EmployeeID']}</div>
+            <div class="stats-grid">
+                <div class="stat-cell">
                     <div class="stat-lbl">STATUS</div>
-                    <div class="stat-val {status_cls}">{staff_member['Status']}</div>
+                    <div class="stat-val {status_cls}">{emp['Status']}</div>
                 </div>
-                <div class="stat-box">
+                <div class="stat-cell">
                     <div class="stat-lbl">LEAVES LEFT</div>
-                    <div class="stat-val">{staff_member['RemainingLeaves']}</div>
+                    <div class="stat-val">{emp['RemainingLeaves']}</div>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-lbl">NEXT OFF DAY</div>
-                    <div class="stat-val">{staff_member['NextOffDay']}</div>
+                <div class="stat-cell">
+                    <div class="stat-lbl">NEXT OFF</div>
+                    <div class="stat-val">{emp['NextOffDay']}</div>
                 </div>
             </div>
         </div>
@@ -589,34 +331,20 @@ if not results.empty:
         unsafe_allow_html=True,
     )
 
-    # Voice Speech feedback
-    if TTS_AVAILABLE:
-        spoken_text, lang_tag = build_spoken_response(staff_member, st.session_state.active_lang)
-        audio_buffer = generate_speech(spoken_text, lang_tag)
-        if audio_buffer:
-            st.audio(audio_buffer, format="audio/mp3", autoplay=True)
+    # Voice Output in English
+    response_msg = f"Welcome {emp['Name']}. Your status is {emp['Status']}. You have {emp['RemainingLeaves']} leaves remaining."
+    speak(response_msg)
 
-    if not st.session_state.admin_authenticated:
-        inject_auto_reset(RESET_DELAY_SECONDS)
-
-# 6. Helper Guidance text at the bottom
-if results.empty:
-    st.markdown(
-        """
-        <div class="guide-wrap">
-            <div class="guide-main">I am your PXT AI Assistant</div>
-            <div class="guide-sub">Say "Hi PXT" or enter an Employee ID / Name to get started</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-else:
-    st.markdown(
+    # Auto reset timer trigger
+    components.html(
         f"""
-        <div class="guide-wrap">
-            <div class="guide-main">Update for {results.iloc[0]['Name']}</div>
-            <div class="guide-sub">Resetting screen in {RESET_DELAY_SECONDS} seconds...</div>
-        </div>
+        <script>
+            setTimeout(function() {{
+                window.parent.location.reload();
+            }}, {int(RESET_DELAY * 1000)});
+        </script>
         """,
-        unsafe_allow_html=True
+        height=0,
     )
+
+st.markdown('</div>', unsafe_allow_html=True)
