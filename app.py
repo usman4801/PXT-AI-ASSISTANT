@@ -1,7 +1,6 @@
 """
-PXT Hub - AI Voice Assistant (Full Futuristic Kiosk)
-A high-tech workplace kiosk featuring a seamless video avatar loop,
-voice recognition, Hindi/Urdu voice feedback, and floating glassmorphic stats.
+PXT HUB - AI Voice Assistant
+Original Banner Layout with Glowing Video Frame, Mic & Floating Data Card
 """
 
 from __future__ import annotations
@@ -9,13 +8,12 @@ from __future__ import annotations
 import io
 import os
 import time
-from datetime import datetime
 
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-# ---- Dependencies Check ----
+# ---- Optional dependencies ----
 try:
     from streamlit_mic_recorder import speech_to_text
     MIC_AVAILABLE = True
@@ -30,7 +28,7 @@ except ImportError:
 
 
 # ============================================================
-# CONFIG
+# CONFIGURATION
 # ============================================================
 APP_TITLE = "PXT HUB"
 DATA_FILE = "staff_data.csv"
@@ -45,282 +43,240 @@ LANGUAGE_OPTIONS = {
 }
 
 st.set_page_config(
-    page_title=f"{APP_TITLE} - AI Voice Assistant",
+    page_title=f"{APP_TITLE} - AI Assistant",
     page_icon="🎙️",
-    layout="wide",
+    layout="centered",
     initial_sidebar_state="collapsed",
 )
 
 
 # ============================================================
-# KIOSK STYLING & GLASSMORPHISM
+# CSS STYLING (MATCHING EXACT ORIGINAL UI)
 # ============================================================
-def inject_kiosk_css() -> None:
+def inject_custom_css() -> None:
     st.markdown(
         """
         <style>
-            /* Hide Streamlit Chrome */
-            #MainMenu {visibility: hidden;}
-            header[data-testid="stHeader"] {display: none;}
-            footer {visibility: hidden;}
-            div[data-testid="stToolbar"] {visibility: hidden; height: 0;}
-            div[data-testid="stDecoration"] {display: none;}
-            div[data-testid="stStatusWidget"] {visibility: hidden;}
-            [data-testid="collapsedControl"] {opacity: 0.3; transition: opacity .2s ease;}
-            [data-testid="collapsedControl"]:hover {opacity: 1;}
+            /* 1. Header / Streamlit UI hide */
+            #MainMenu, header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"] {
+                display: none !important;
+                visibility: hidden !important;
+            }
+            [data-testid="collapsedControl"] {
+                opacity: 0.2;
+                transition: opacity 0.3s ease;
+            }
+            [data-testid="collapsedControl"]:hover {
+                opacity: 1;
+            }
 
-            /* Kiosk Fullscreen Dark Universe */
+            /* 2. Global Dark Theme */
             html, body, [data-testid="stAppViewContainer"], .stApp {
-                background: radial-gradient(circle at 50% 15%, #0d1222 0%, #05070d 60%, #020305 100%) !important;
-                color: #e9edf5;
-                font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-                overflow-x: hidden;
-            }
-            .block-container {
-                padding-top: 1.5rem !important;
-                padding-bottom: 1.5rem !important;
-                max-width: 820px !important;
-                margin: 0 auto;
+                background: #060913 !important;
+                color: #ffffff !important;
+                font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
             }
 
-            /* Top Pill Indicator */
-            .status-pill-wrap {
-                text-align: center;
-                margin-bottom: 0.8rem;
+            .main .block-container {
+                max-width: 680px !important;
+                padding-top: 1.8rem !important;
+                padding-bottom: 2rem !important;
+                margin: 0 auto !important;
             }
+
+            /* 3. Title */
+            .pxt-title {
+                text-align: center;
+                font-size: 2.2rem;
+                font-weight: 900;
+                letter-spacing: 0.18em;
+                color: #ffffff;
+                text-transform: uppercase;
+                margin-bottom: 1.2rem;
+                text-shadow: 0 0 15px rgba(56, 189, 248, 0.75), 0 0 30px rgba(56, 189, 248, 0.3);
+            }
+
+            /* 4. Center Video Banner Frame */
+            .video-frame-wrap {
+                width: 100%;
+                max-width: 650px;
+                margin: 0 auto 1.4rem auto;
+                border-radius: 22px;
+                overflow: hidden;
+                border: 1.5px solid rgba(56, 189, 248, 0.45);
+                box-shadow: 0 0 35px rgba(56, 189, 248, 0.28), 0 10px 30px rgba(0, 0, 0, 0.7);
+                background: #000000;
+            }
+
+            .video-frame-wrap video {
+                width: 100%;
+                height: auto;
+                display: block;
+                object-fit: cover;
+                max-height: 340px;
+            }
+
+            /* 5. Status Pill */
+            .pill-wrapper {
+                text-align: center;
+                margin-bottom: 1.2rem;
+            }
+
             .status-pill {
                 display: inline-flex;
                 align-items: center;
-                gap: 8px;
-                padding: 0.4rem 1.3rem;
+                gap: 9px;
+                padding: 0.45rem 1.4rem;
                 border-radius: 999px;
-                background: rgba(14, 23, 42, 0.7);
-                border: 1px solid rgba(126, 224, 255, 0.25);
-                box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
-                font-size: 0.85rem;
-                font-weight: 600;
-                color: #93c5fd;
-                letter-spacing: 0.04em;
-                backdrop-filter: blur(8px);
+                background: rgba(15, 23, 42, 0.8);
+                border: 1px solid rgba(56, 189, 248, 0.35);
+                box-shadow: 0 0 18px rgba(56, 189, 248, 0.2);
+                font-size: 0.88rem;
+                font-weight: 500;
+                color: #cbebff;
             }
+
             .status-dot {
                 width: 8px;
                 height: 8px;
                 border-radius: 50%;
                 background: #38bdf8;
-                box-shadow: 0 0 8px #38bdf8;
-                animation: pulseDot 1.4s infinite ease-in-out;
+                box-shadow: 0 0 10px #38bdf8;
+                animation: pulseGlow 1.5s infinite ease-in-out;
             }
-            @keyframes pulseDot {
+
+            @keyframes pulseGlow {
                 0%, 100% { transform: scale(1); opacity: 0.7; }
                 50% { transform: scale(1.4); opacity: 1; }
             }
 
-            /* Holographic Avatar Stage */
-            .avatar-stage {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 1.2rem;
-                margin: 0.2rem 0 1.2rem 0;
-            }
-            .eq-side {
-                display: flex;
-                align-items: center;
-                gap: 5px;
-                height: 140px;
-            }
-            .eq-bar {
-                width: 5px;
-                border-radius: 6px;
-                animation: eqPulse 1.2s infinite ease-in-out;
-            }
-            .eq-left .eq-bar { background: linear-gradient(180deg, #38bdf8, #6366f1); }
-            .eq-right .eq-bar { background: linear-gradient(180deg, #ec4899, #8b5cf6); }
-
-            @keyframes eqPulse {
-                0%, 100% { transform: scaleY(0.25); opacity: 0.4; }
-                50% { transform: scaleY(1); opacity: 1; }
+            /* 6. Language Radio alignment */
+            div[role="radiogroup"] {
+                justify-content: center !important;
+                margin-bottom: 1rem !important;
+                gap: 1.5rem !important;
             }
 
-            .avatar-portal {
-                position: relative;
-                width: 250px;
-                height: 250px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .portal-video {
-                width: 220px;
-                height: 220px;
-                border-radius: 50%;
-                object-fit: cover;
-                border: 2px solid rgba(126, 224, 255, 0.4);
-                box-shadow: 0 0 35px rgba(56, 189, 248, 0.35), inset 0 0 20px rgba(0,0,0,0.8);
-                z-index: 2;
-                background: #000;
-            }
-            .glow-ring {
-                position: absolute;
-                border-radius: 50%;
-                border: 2px solid transparent;
-            }
-            .ring-a {
-                width: 248px;
-                height: 248px;
-                border-top-color: rgba(56, 189, 248, 0.8);
-                border-right-color: rgba(168, 85, 247, 0.6);
-                animation: spinPortal 8s linear infinite;
-            }
-            .ring-b {
-                width: 236px;
-                height: 236px;
-                border-bottom-color: rgba(236, 72, 153, 0.8);
-                border-left-color: rgba(56, 189, 248, 0.5);
-                animation: spinPortal 11s linear infinite reverse;
-            }
-            @keyframes spinPortal {
-                from { transform: rotate(0deg); }
-                to { transform: rotate(360deg); }
+            div[role="radiogroup"] label {
+                color: #cbd5e1 !important;
+                font-size: 0.95rem !important;
             }
 
-            .portal-badge {
-                position: absolute;
-                bottom: 2px;
-                z-index: 4;
-                background: rgba(3, 7, 18, 0.85);
-                border: 1px solid rgba(126, 224, 255, 0.4);
-                padding: 0.15rem 0.9rem;
-                border-radius: 999px;
-                font-size: 0.72rem;
-                font-weight: 800;
-                letter-spacing: 0.3em;
-                color: #f1f5f9;
-                text-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+            /* 7. Search Input & Button */
+            div[data-testid="stTextInput"] input {
+                background: rgba(15, 23, 42, 0.85) !important;
+                border: 1px solid rgba(56, 189, 248, 0.35) !important;
+                border-radius: 14px !important;
+                color: #ffffff !important;
+                height: 3.1rem;
+                font-size: 0.98rem !important;
+                padding-left: 1rem !important;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             }
 
-            /* Futuristic Floating Card */
-            .holo-card {
-                background: rgba(15, 23, 42, 0.65);
-                backdrop-filter: blur(20px);
-                -webkit-backdrop-filter: blur(20px);
-                border: 1px solid rgba(126, 224, 255, 0.22);
-                border-radius: 22px;
-                padding: 1.5rem 1.8rem;
-                margin: 0.5rem auto 1.2rem auto;
-                max-width: 480px;
-                box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(56, 189, 248, 0.15);
+            div[data-testid="stTextInput"] input:focus {
+                border-color: #38bdf8 !important;
+                box-shadow: 0 0 15px rgba(56, 189, 248, 0.4) !important;
+            }
+
+            .stButton > button {
+                background: #1e293b !important;
+                border: 1px solid rgba(56, 189, 248, 0.4) !important;
+                border-radius: 14px !important;
+                color: #ffffff !important;
+                height: 3.1rem !important;
+                font-weight: 600;
+                font-size: 0.95rem;
+                transition: all 0.2s ease;
+            }
+
+            .stButton > button:hover {
+                border-color: #38bdf8 !important;
+                box-shadow: 0 0 15px rgba(56, 189, 248, 0.4) !important;
+                color: #38bdf8 !important;
+            }
+
+            /* 8. Bottom Helper Text */
+            .guide-wrap {
                 text-align: center;
-                animation: floatUp 0.4s ease-out;
+                margin-top: 1.4rem;
+                margin-bottom: 1rem;
             }
-            @keyframes floatUp {
-                from { opacity: 0; transform: translateY(14px); }
-                to { opacity: 1; transform: translateY(0); }
+
+            .guide-main {
+                font-size: 1.25rem;
+                font-weight: 700;
+                color: #f8fafc;
+                margin-bottom: 0.3rem;
             }
-            .holo-card-name {
-                font-size: 1.7rem;
+
+            .guide-sub {
+                font-size: 0.88rem;
+                color: #94a3b8;
+            }
+
+            /* 9. Employee Result Card */
+            .result-card {
+                background: rgba(15, 23, 42, 0.85);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                border: 1px solid rgba(56, 189, 248, 0.4);
+                border-radius: 20px;
+                padding: 1.4rem 1.8rem;
+                margin: 1.2rem auto;
+                max-width: 580px;
+                text-align: center;
+                box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 25px rgba(56, 189, 248, 0.2);
+            }
+
+            .card-name {
+                font-size: 1.6rem;
                 font-weight: 800;
                 color: #ffffff;
-                letter-spacing: -0.02em;
             }
-            .holo-card-id {
+
+            .card-id {
                 color: #94a3b8;
                 font-size: 0.85rem;
-                margin-bottom: 1.1rem;
-                letter-spacing: 0.05em;
+                letter-spacing: 0.08em;
+                margin-bottom: 1rem;
             }
-            .stats-grid {
+
+            .stats-row {
                 display: grid;
                 grid-template-columns: repeat(3, 1fr);
-                gap: 0.7rem;
+                gap: 0.8rem;
+                margin-top: 0.8rem;
             }
+
             .stat-box {
                 background: rgba(255, 255, 255, 0.04);
                 border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 14px;
-                padding: 0.75rem 0.4rem;
+                border-radius: 12px;
+                padding: 0.7rem 0.4rem;
             }
-            .stat-label {
-                font-size: 0.64rem;
-                letter-spacing: 0.08em;
+
+            .stat-lbl {
+                font-size: 0.68rem;
                 text-transform: uppercase;
+                letter-spacing: 0.08em;
                 color: #94a3b8;
                 margin-bottom: 0.25rem;
             }
+
             .stat-val {
-                font-size: 1.08rem;
+                font-size: 1.15rem;
                 font-weight: 700;
             }
-            .status-present { color: #34d399; text-shadow: 0 0 10px rgba(52, 211, 153, 0.4); }
-            .status-leave { color: #fb923c; text-shadow: 0 0 10px rgba(251, 146, 60, 0.4); }
+
+            .status-present { color: #34d399; }
+            .status-leave { color: #fb923c; }
             .status-other { color: #38bdf8; }
 
-            /* Guidance Subtitles */
-            .guide-wrap {
-                text-align: center;
-                margin-bottom: 1.2rem;
-            }
-            .guide-main {
-                font-size: 1.05rem;
-                font-weight: 700;
-                color: #f8fafc;
-            }
-            .guide-sub {
-                font-size: 0.82rem;
-                color: #64748b;
-                margin-top: 0.2rem;
-            }
-
-            /* Custom Inputs & Controls */
-            div[data-testid="stTextInput"] input {
-                background: rgba(15, 23, 42, 0.7) !important;
-                border: 1px solid rgba(126, 224, 255, 0.2) !important;
-                border-radius: 16px !important;
-                color: #fff !important;
-                height: 3.2rem;
-                font-size: 1rem !important;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            }
-            div[data-testid="stTextInput"] input:focus {
-                border-color: #38bdf8 !important;
-                box-shadow: 0 0 14px rgba(56, 189, 248, 0.3) !important;
-            }
-            .stButton > button {
-                background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-                color: #f8fafc;
-                border: 1px solid rgba(126, 224, 255, 0.25);
-                border-radius: 16px;
-                height: 3.2rem;
-                font-weight: 600;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            }
-            .stButton > button:hover {
-                border-color: #38bdf8;
-                color: #38bdf8;
-                box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
-            }
-
-            /* Radio Buttons Centered */
-            div[role="radiogroup"] {
-                justify-content: center;
-                margin-bottom: 0.6rem;
-            }
-
-            /* Audio Player Cleanup */
             audio {
                 width: 100%;
-                margin-top: 0.6rem;
-                border-radius: 12px;
-                opacity: 0.85;
-            }
-
-            .footer-info {
-                text-align: center;
-                color: #475569;
-                font-size: 0.74rem;
-                margin-top: 1.8rem;
-                letter-spacing: 0.04em;
+                margin-top: 0.8rem;
+                border-radius: 10px;
             }
         </style>
         """,
@@ -328,39 +284,7 @@ def inject_kiosk_css() -> None:
     )
 
 
-def render_avatar_portal() -> None:
-    """Renders the circular video avatar loop flanked by dynamic equalizer bars."""
-    def make_bars(side: str, count: int = 12) -> str:
-        items = []
-        for i in range(count):
-            duration = 0.6 + (i % 4) * 0.18
-            delay = (i % 6) * 0.09
-            height = 32 + (i % 5) * 16
-            items.append(
-                f'<span class="eq-bar" style="animation-duration:{duration}s;'
-                f'animation-delay:{delay}s;height:{height}%;"></span>'
-            )
-        return f'<div class="eq-side eq-{side}">{"".join(items)}</div>'
-
-    st.markdown(
-        f"""
-        <div class="avatar-stage">
-            {make_bars("left")}
-            <div class="avatar-portal">
-                <div class="glow-ring ring-a"></div>
-                <div class="glow-ring ring-b"></div>
-                <video class="portal-video" src="{VIDEO_URL}" autoplay loop muted playsinline></video>
-                <div class="portal-badge">{APP_TITLE}</div>
-            </div>
-            {make_bars("right")}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def inject_auto_reset(delay_seconds: float) -> None:
-    """Resets the kiosk display automatically after inactivity."""
     components.html(
         f"""
         <script>
@@ -374,7 +298,7 @@ def inject_auto_reset(delay_seconds: float) -> None:
 
 
 # ============================================================
-# DATA ENGINE
+# DATA FUNCTIONS
 # ============================================================
 def _demo_data() -> pd.DataFrame:
     return pd.DataFrame([
@@ -424,7 +348,7 @@ def search_staff(df: pd.DataFrame, query: str) -> pd.DataFrame:
 
 
 # ============================================================
-# VOICE OUTPUT (HINDI / URDU / ENGLISH)
+# SPEECH / VOICE OUTPUT
 # ============================================================
 def generate_speech(text: str, lang_code: str = "hi"):
     if not TTS_AVAILABLE:
@@ -438,7 +362,6 @@ def generate_speech(text: str, lang_code: str = "hi"):
         return None
 
 def build_spoken_response(row, lang_choice: str) -> tuple[str, str]:
-    """Generates natural bilingual audio replies for the assistant."""
     name = row['Name']
     status = row['Status']
     leaves = row['RemainingLeaves']
@@ -451,7 +374,7 @@ def build_spoken_response(row, lang_choice: str) -> tuple[str, str]:
         text = f"Hello {name}. Your current status is {status}. You have {leaves} leaves remaining, and your next off day is {off_day}."
         return text, "en"
 
-def get_status_style(status: str) -> str:
+def get_status_class(status: str) -> str:
     s = str(status).lower()
     if "present" in s:
         return "status-present"
@@ -460,9 +383,7 @@ def get_status_style(status: str) -> str:
     return "status-other"
 
 
-# ============================================================
-# STATE INITIALIZATION
-# ============================================================
+# State variables
 defaults = {
     "prefill_query": "",
     "reset_counter": 0,
@@ -476,9 +397,9 @@ for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-inject_kiosk_css()
+inject_custom_css()
 
-# Auto reset timer trigger
+# Auto-reset logic
 if st.session_state.result_shown_at and (time.time() - st.session_state.result_shown_at) > RESET_DELAY_SECONDS:
     st.session_state.prefill_query = ""
     st.session_state.reset_counter += 1
@@ -488,10 +409,10 @@ if st.session_state.result_shown_at and (time.time() - st.session_state.result_s
 
 
 # ============================================================
-# ADMIN DRAWER (SIDEBAR)
+# ADMIN SIDEBAR
 # ============================================================
 with st.sidebar:
-    st.markdown("### 🔒 PXT Kiosk Administration")
+    st.markdown("### 🔒 Kiosk Admin")
     if not st.session_state.admin_authenticated:
         with st.expander("Admin Login", expanded=False):
             pwd = st.text_input("Password", type="password", key="admin_pwd_box")
@@ -500,17 +421,16 @@ with st.sidebar:
                     st.session_state.admin_authenticated = True
                     st.rerun()
                 else:
-                    st.error("Invalid password")
+                    st.error("Incorrect password")
     else:
-        st.success("Admin unlocked")
-        if st.button("Lock Admin", use_container_width=True):
+        st.success("Admin Active")
+        if st.button("Logout", use_container_width=True):
             st.session_state.admin_authenticated = False
             st.rerun()
 
         st.divider()
-        st.markdown("**Upload Updated Staff Sheet**")
         uploaded = st.file_uploader("Upload CSV", type=["csv"])
-        if uploaded and st.button("Overwrite staff_data.csv", use_container_width=True):
+        if uploaded and st.button("Save Data", use_container_width=True):
             ok, msg = save_staff_data(uploaded)
             if ok:
                 st.success(msg)
@@ -520,37 +440,48 @@ with st.sidebar:
                 st.error(msg)
 
         st.divider()
-        st.markdown("**Live Database Preview**")
         curr_df = load_staff_data(DATA_FILE, get_file_mtime(DATA_FILE))
         st.dataframe(curr_df, use_container_width=True, hide_index=True)
 
 
 # ============================================================
-# MAIN KIOSK VIEW
+# MAIN FOREGROUND VIEW
 # ============================================================
 staff_df = load_staff_data(DATA_FILE, get_file_mtime(DATA_FILE))
 
-# 1. Top Status Pill
-if st.session_state.input_source == "voice":
-    pill_msg = f"Listening... Heard: {st.session_state.active_lang}"
-elif st.session_state.input_source == "text":
-    pill_msg = "Processing Search Query"
-else:
-    pill_msg = 'Listening... Say "Hi PXT" or tap Speak'
+# 1. PXT HUB Title
+st.markdown(f'<div class="pxt-title">{APP_TITLE}</div>', unsafe_allow_html=True)
 
+# 2. Glowing Banner Video
 st.markdown(
-    f'''<div class="status-pill-wrap">
-        <span class="status-pill"><span class="status-dot"></span>{pill_msg}</span>
-    </div>''',
+    f"""
+    <div class="video-frame-wrap">
+        <video autoplay loop muted playsinline>
+            <source src="{VIDEO_URL}" type="video/mp4">
+        </video>
+    </div>
+    """,
     unsafe_allow_html=True
 )
 
-# 2. Portal Video Avatar
-render_avatar_portal()
+# 3. Status Pill
+if st.session_state.input_source == "voice":
+    pill_text = f"Listening... Heard: {st.session_state.active_lang}"
+elif st.session_state.input_source == "text":
+    pill_text = "Searching Employee Record..."
+else:
+    pill_text = 'Listening... say "Hi PXT" or tap Speak'
 
-# 3. Language Selector & Input Interface
-reset_idx = st.session_state.reset_counter
+st.markdown(
+    f"""
+    <div class="pill-wrapper">
+        <span class="status-pill"><span class="status-dot"></span>{pill_text}</span>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
+# 4. Language Selector
 selected_lang = st.radio(
     "Language",
     list(LANGUAGE_OPTIONS.keys()),
@@ -560,6 +491,8 @@ selected_lang = st.radio(
 )
 st.session_state.active_lang = selected_lang
 
+# 5. Search Controls (Text input & Speak button)
+reset_idx = st.session_state.reset_counter
 col_input, col_speak = st.columns([4, 1])
 
 with col_input:
@@ -583,103 +516,86 @@ with col_speak:
             key=f"mic_btn_{reset_idx}",
         )
     else:
-        st.button("🎤 Speak", disabled=True, use_container_width=True, help="Install streamlit-mic-recorder")
+        st.button("🎤 Speak", disabled=True, use_container_width=True)
 
+# Input event triggers
 if spoken_result:
     st.session_state.prefill_query = spoken_result
     st.session_state.input_source = "voice"
     st.session_state.reset_counter += 1
     st.rerun()
 
-current_query = text_val
-if current_query and current_query != st.session_state.prefill_query:
+if text_val and text_val != st.session_state.prefill_query:
+    st.session_state.prefill_query = text_val
     st.session_state.input_source = "text"
-elif not current_query:
-    st.session_state.input_source = None
+    st.rerun()
 
 
-# ============================================================
-# RESULTS DISPLAY & AUTO-RESET
-# ============================================================
-if current_query and current_query.strip():
-    records = search_staff(staff_df, current_query)
+# 6. Results & Data Card Display
+active_query = st.session_state.prefill_query
+results = search_staff(staff_df, active_query) if (active_query and active_query.strip()) else pd.DataFrame()
 
-    if records.empty:
-        st.session_state.result_shown_at = None
-        st.session_state.last_shown_query = None
-        st.markdown(
-            f'''<div class="guide-wrap">
-                <div class="guide-main">Record not found</div>
-                <div class="guide-sub">No results for "{current_query}". Please try again.</div>
-            </div>''',
-            unsafe_allow_html=True
-        )
-    else:
-        if st.session_state.last_shown_query != current_query:
-            st.session_state.result_shown_at = time.time()
-            st.session_state.last_shown_query = current_query
+if not results.empty:
+    if st.session_state.last_shown_query != active_query:
+        st.session_state.result_shown_at = time.time()
+        st.session_state.last_shown_query = active_query
 
-        staff_member = records.iloc[0]
-        stat_color_cls = get_status_style(staff_member["Status"])
+    staff_member = results.iloc[0]
+    status_cls = get_status_class(staff_member["Status"])
 
-        # Holographic Glass Card
-        st.markdown(
-            f"""
-            <div class="holo-card">
-                <div class="holo-card-name">{staff_member['Name']}</div>
-                <div class="holo-card-id">{staff_member['EmployeeID']}</div>
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <div class="stat-label">STATUS</div>
-                        <div class="stat-val {stat_color_cls}">{staff_member['Status']}</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">LEAVES LEFT</div>
-                        <div class="stat-val">{staff_member['RemainingLeaves']}</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">NEXT OFF DAY</div>
-                        <div class="stat-val">{staff_member['NextOffDay']}</div>
-                    </div>
+    # Show Glass Card
+    st.markdown(
+        f"""
+        <div class="result-card">
+            <div class="card-name">{staff_member['Name']}</div>
+            <div class="card-id">{staff_member['EmployeeID']}</div>
+            <div class="stats-row">
+                <div class="stat-box">
+                    <div class="stat-lbl">STATUS</div>
+                    <div class="stat-val {status_cls}">{staff_member['Status']}</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-lbl">LEAVES LEFT</div>
+                    <div class="stat-val">{staff_member['RemainingLeaves']}</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-lbl">NEXT OFF DAY</div>
+                    <div class="stat-val">{staff_member['NextOffDay']}</div>
                 </div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        st.markdown(
-            f'''<div class="guide-wrap">
-                <div class="guide-main">Update for {staff_member["Name"]}</div>
-                <div class="guide-sub">Screen auto-resetting in {RESET_DELAY_SECONDS} seconds...</div>
-            </div>''',
-            unsafe_allow_html=True
-        )
+    # Voice Speech feedback
+    if TTS_AVAILABLE:
+        spoken_text, lang_tag = build_spoken_response(staff_member, st.session_state.active_lang)
+        audio_buffer = generate_speech(spoken_text, lang_tag)
+        if audio_buffer:
+            st.audio(audio_buffer, format="audio/mp3", autoplay=True)
 
-        # Spoken audio response
-        if TTS_AVAILABLE:
-            spoken_text, lang_tag = build_spoken_response(staff_member, selected_lang)
-            audio_buffer = generate_speech(spoken_text, lang_tag)
-            if audio_buffer:
-                st.audio(audio_buffer, format="audio/mp3", autoplay=True)
+    if not st.session_state.admin_authenticated:
+        inject_auto_reset(RESET_DELAY_SECONDS)
 
-        # Trigger auto-reset
-        if not st.session_state.admin_authenticated:
-            inject_auto_reset(RESET_DELAY_SECONDS)
-
-else:
-    st.session_state.result_shown_at = None
-    st.session_state.last_shown_query = None
+# 7. Helper Guidance text at the bottom
+if results.empty:
     st.markdown(
         """
         <div class="guide-wrap">
             <div class="guide-main">I am your PXT AI Assistant</div>
-            <div class="guide-sub">Tap "Speak" or type an Employee ID / Name to begin</div>
+            <div class="guide-sub">Say "Hi PXT" or enter an Employee ID / Name to get started</div>
         </div>
         """,
         unsafe_allow_html=True
     )
-
-st.markdown(
-    f'<div class="footer-info">PXT Hub · Live Kiosk · {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div>',
-    unsafe_allow_html=True
-)
+else:
+    st.markdown(
+        f"""
+        <div class="guide-wrap">
+            <div class="guide-main">Update for {results.iloc[0]['Name']}</div>
+            <div class="guide-sub">Resetting screen in {RESET_DELAY_SECONDS} seconds...</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
