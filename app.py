@@ -1,5 +1,5 @@
 """
-PXT HUB - Clean Cyber Kiosk with Voice Recognition & Banner Switcher
+PXT HUB - Clean Cyber Kiosk with Dynamic Mic States & Theme Switcher
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ st.set_page_config(
 
 
 # ============================================================
-# SESSION STATES
+# SESSION STATES & URL PARAMS
 # ============================================================
 if "active_banner" not in st.session_state:
     st.session_state.active_banner = 1
@@ -56,6 +56,13 @@ if "last_heard" not in st.session_state:
     st.session_state.last_heard = ""
 if "last_interaction" not in st.session_state:
     st.session_state.last_interaction = None
+
+# Query param se direct toggle (theme dot button ke liye)
+params = st.query_params
+if "switch_banner" in params:
+    st.session_state.active_banner = 2 if st.session_state.active_banner == 1 else 1
+    st.query_params.clear()
+    st.rerun()
 
 
 # ============================================================
@@ -98,9 +105,10 @@ st.markdown(
             z-index: 1;
         }
 
+        /* PXT HUB Title */
         .hud-title-wrap {
             position: fixed;
-            top: 15vh;
+            top: 14vh;
             left: 50%;
             transform: translateX(-50%);
             z-index: 20;
@@ -117,16 +125,32 @@ st.markdown(
             text-transform: uppercase;
         }
 
+        /* Gale ke paas chota gray prompt */
+        .throat-prompt {
+            position: fixed;
+            top: 24vh;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            color: #94a3b8;
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-weight: 500;
+            pointer-events: none;
+            opacity: 0.85;
+        }
+
         /* Top HUD Bar */
         .top-hud-bar {
             position: fixed;
-            top: 15px;
+            top: 16px;
             left: 0;
             width: 100vw;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 24px;
+            padding: 0 22px;
             z-index: 50;
             box-sizing: border-box;
             pointer-events: none;
@@ -138,27 +162,44 @@ st.markdown(
             gap: 7px;
         }
 
+        /* Red Mic dot jab chup ho */
+        .red-mic-dot {
+            width: 8px;
+            height: 8px;
+            background: #ef4444;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #ef4444;
+        }
+
+        /* Green Mic dot jab bol rahe hon / listening */
         .green-mic-dot {
             width: 8px;
             height: 8px;
             background: #22c55e;
             border-radius: 50%;
             box-shadow: 0 0 10px #22c55e, 0 0 18px #22c55e;
-            animation: pulseGreen 1.4s infinite ease-in-out;
+            animation: pulseGreen 1.2s infinite ease-in-out;
         }
 
         @keyframes pulseGreen {
             0%, 100% { transform: scale(1); opacity: 0.8; }
-            50% { transform: scale(1.3); opacity: 1; }
+            50% { transform: scale(1.4); opacity: 1; }
         }
 
-        .mic-label {
+        .mic-label-red {
+            color: #f87171;
+            font-weight: 600;
+            font-size: 0.65rem !important;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .mic-label-green {
             color: #4ade80;
             font-weight: 600;
             font-size: 0.65rem !important;
             letter-spacing: 0.06em;
             text-transform: uppercase;
-            opacity: 0.9;
         }
 
         .heard-capsule {
@@ -176,25 +217,21 @@ st.markdown(
             box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
         }
 
-        /* Top Right Theme Dot Container */
-        .theme-dot-container {
+        /* Top Right Theme Dot Link */
+        .theme-dot-anchor {
             position: fixed;
-            top: 16px;
-            right: 24px;
-            z-index: 9999;
-        }
-
-        .theme-dot-container .stButton > button {
-            width: 14px !important;
-            height: 14px !important;
-            min-height: 14px !important;
-            border-radius: 50% !important;
-            background: #38bdf8 !important;
-            border: 1.5px solid #ffffff !important;
-            box-shadow: 0 0 10px #38bdf8, 0 0 20px rgba(56, 189, 248, 0.8) !important;
-            padding: 0 !important;
-            cursor: pointer !important;
-            outline: none !important;
+            top: 18px;
+            right: 22px;
+            width: 13px;
+            height: 13px;
+            background: #38bdf8;
+            border: 1.5px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #38bdf8, 0 0 18px rgba(56, 189, 248, 0.8);
+            z-index: 99999;
+            cursor: pointer;
+            text-decoration: none;
+            display: block;
         }
 
         /* Bottom Floating Interactive Deck */
@@ -291,7 +328,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Background Video & Title
+# Background Video, Title & Throat Prompt
 st.markdown(
     f"""
     <video id="kiosk-bg-video" autoplay loop muted playsinline key="{active_video}">
@@ -300,32 +337,44 @@ st.markdown(
     <div class="hud-title-wrap">
         <div class="hud-pxt-title">{APP_TITLE}</div>
     </div>
+    <div class="throat-prompt">Say "Hi PXT"</div>
     """,
     unsafe_allow_html=True,
 )
 
-# Top Right Theme Switcher Dot
-st.markdown('<div class="theme-dot-container">', unsafe_allow_html=True)
-if st.button(" ", key="banner_switch_dot", help="Switch Banner Theme"):
-    st.session_state.active_banner = 2 if st.session_state.active_banner == 1 else 1
-    st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Top HUD Bar
-heard_capsule_html = ""
-if st.session_state.last_heard.strip():
-    heard_capsule_html = f'<div class="heard-capsule">Heard: {st.session_state.last_heard}</div>'
-
-hud_html = (
-    '<div class="top-hud-bar">'
-    '  <div class="mic-dot-container">'
-    '    <span class="green-mic-dot"></span>'
-    '    <span class="mic-label">MIC ON</span>'
-    '  </div>'
-    + heard_capsule_html +
-    '</div>'
+# Top Right Theme Switcher Dot (Direct link, guaranteed to show)
+st.markdown(
+    """<a href="?switch_banner=true" target="_self" class="theme-dot-anchor" title="Switch Theme"></a>""",
+    unsafe_allow_html=True,
 )
-st.markdown(hud_html, unsafe_allow_html=True)
+
+# Top HUD Bar (Mic State: Red by default, Green when listening/active)
+is_active_listening = bool(st.session_state.last_heard.strip())
+
+if is_active_listening:
+    dot_class = "green-mic-dot"
+    label_class = "mic-label-green"
+    label_text = "LISTENING"
+    heard_pill = f'<div class="heard-capsule">Heard: {st.session_state.last_heard}</div>'
+else:
+    dot_class = "red-mic-dot"
+    label_class = "mic-label-red"
+    label_text = "MIC ON"
+    heard_pill = ""
+
+st.markdown(
+    f"""
+    <div class="top-hud-bar">
+        <div class="mic-dot-container">
+            <span class="{dot_class}"></span>
+            <span class="{label_class}">{label_text}</span>
+        </div>
+        {heard_pill}
+        <div style="width: 20px;"></div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # ============================================================
