@@ -117,6 +117,7 @@ st.markdown(
             text-transform: uppercase;
         }
 
+        /* Top HUD Bar */
         .top-hud-bar {
             position: fixed;
             top: 15px;
@@ -125,7 +126,7 @@ st.markdown(
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 20px;
+            padding: 0 24px;
             z-index: 50;
             box-sizing: border-box;
             pointer-events: none;
@@ -175,25 +176,28 @@ st.markdown(
             box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
         }
 
-        .theme-dot-btn {
+        /* Top Right Theme Dot Container */
+        .theme-dot-container {
             position: fixed;
-            top: 15px;
-            right: 20px;
+            top: 16px;
+            right: 24px;
             z-index: 9999;
         }
 
-        .theme-dot-btn button {
+        .theme-dot-container .stButton > button {
             width: 14px !important;
             height: 14px !important;
             min-height: 14px !important;
             border-radius: 50% !important;
             background: #38bdf8 !important;
             border: 1.5px solid #ffffff !important;
-            box-shadow: 0 0 12px #38bdf8, 0 0 22px rgba(56, 189, 248, 0.8) !important;
+            box-shadow: 0 0 10px #38bdf8, 0 0 20px rgba(56, 189, 248, 0.8) !important;
             padding: 0 !important;
             cursor: pointer !important;
+            outline: none !important;
         }
 
+        /* Bottom Floating Interactive Deck */
         .kiosk-bottom-deck {
             position: fixed;
             bottom: 3.5vh;
@@ -272,7 +276,7 @@ st.markdown(
             box-shadow: 0 4px 20px rgba(0,0,0,0.6);
         }
 
-        .stButton > button {
+        .kiosk-bottom-deck .stButton > button {
             background: rgba(15, 23, 42, 0.88) !important;
             border: 1.5px solid rgba(56, 189, 248, 0.4) !important;
             border-radius: 999px !important;
@@ -301,30 +305,27 @@ st.markdown(
 )
 
 # Top Right Theme Switcher Dot
-st.markdown('<div class="theme-dot-btn">', unsafe_allow_html=True)
+st.markdown('<div class="theme-dot-container">', unsafe_allow_html=True)
 if st.button(" ", key="banner_switch_dot", help="Switch Banner Theme"):
     st.session_state.active_banner = 2 if st.session_state.active_banner == 1 else 1
     st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
 # Top HUD Bar
-heard_html = ""
+heard_capsule_html = ""
 if st.session_state.last_heard.strip():
-    heard_html = f'<div class="heard-capsule">Heard: {st.session_state.last_heard}</div>'
+    heard_capsule_html = f'<div class="heard-capsule">Heard: {st.session_state.last_heard}</div>'
 
-st.markdown(
-    f"""
-    <div class="top-hud-bar">
-        <div class="mic-dot-container">
-            <span class="green-mic-dot"></span>
-            <span class="mic-label">MIC ON</span>
-        </div>
-        {heard_html}
-        <div style="width: 20px;"></div>
-    </div>
-    """,
-    unsafe_allow_html=True,
+hud_html = (
+    '<div class="top-hud-bar">'
+    '  <div class="mic-dot-container">'
+    '    <span class="green-mic-dot"></span>'
+    '    <span class="mic-label">MIC ON</span>'
+    '  </div>'
+    + heard_capsule_html +
+    '</div>'
 )
+st.markdown(hud_html, unsafe_allow_html=True)
 
 
 # ============================================================
