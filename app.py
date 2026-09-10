@@ -29,15 +29,15 @@ except ImportError:
 # ============================================================
 # CONFIGURATION
 # ============================================================
+APP_TITLE = "PXT HUB"
 DATA_FILE = "staff_data.csv"
 RESET_DELAY = 12
 
-# Dono Banners ke URLs
 BANNER_1_URL = "https://raw.githubusercontent.com/usman4801/PXT-AI-ASSISTANT/main/banner.mp4"
 BANNER_2_URL = "https://raw.githubusercontent.com/usman4801/PXT-AI-ASSISTANT/main/banner2.mp4"
 
 st.set_page_config(
-    page_title="PXT HUB",
+    page_title=APP_TITLE,
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -48,52 +48,50 @@ st.set_page_config(
 # STATE INITIALIZATION
 # ============================================================
 if "active_banner" not in st.session_state:
-    st.session_state.active_banner = 1  # 1 ya 2
+    st.session_state.active_banner = 1
 if "kiosk_state" not in st.session_state:
-    st.session_state.kiosk_state = "idle"  # idle -> asked_badge -> employee_active
+    st.session_state.kiosk_state = "idle"
 if "current_employee" not in st.session_state:
     st.session_state.current_employee = None
 if "last_heard" not in st.session_state:
     st.session_state.last_heard = ""
-if "voice_feedback" not in st.session_state:
-    st.session_state.voice_feedback = None
 if "last_interaction" not in st.session_state:
     st.session_state.last_interaction = None
 
 
 # ============================================================
-# FULLSCREEN & HUD STYLING (MATCHING THE SCREENSHOT)
+# FULLSCREEN & HUD STYLING
 # ============================================================
 active_video_url = BANNER_1_URL if st.session_state.active_banner == 1 else BANNER_2_URL
 
 st.markdown(
-    f"""
+    """
     <style>
-        /* Hide all Streamlit extras */
-        #MainMenu, header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], [data-testid="collapsedControl"] {{
+        /* Streamlit UI elements hide */
+        #MainMenu, header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], [data-testid="collapsedControl"] {
             display: none !important;
             visibility: hidden !important;
-        }}
+        }
 
-        html, body, [data-testid="stAppViewContainer"], .stApp {{
+        html, body, [data-testid="stAppViewContainer"], .stApp {
             background: #000000 !important;
             margin: 0 !important;
             padding: 0 !important;
             overflow: hidden !important;
             height: 100vh !important;
             width: 100vw !important;
-        }}
+        }
 
-        .main .block-container {{
+        .main .block-container {
             padding: 0 !important;
             margin: 0 !important;
             max-width: 100vw !important;
             width: 100vw !important;
             height: 100vh !important;
-        }}
+        }
 
         /* Edge-to-Edge Fullscreen Video */
-        #kiosk-bg-video {{
+        #kiosk-bg-video {
             position: fixed;
             top: 0;
             left: 0;
@@ -101,10 +99,10 @@ st.markdown(
             height: 100vh;
             object-fit: cover;
             z-index: 1;
-        }}
+        }
 
         /* Center PXT HUB Title over Face/Nose area */
-        .hud-title-wrap {{
+        .hud-title-wrap {
             position: fixed;
             top: 18vh;
             left: 50%;
@@ -112,19 +110,19 @@ st.markdown(
             z-index: 20;
             text-align: center;
             pointer-events: none;
-        }}
+        }
 
-        .hud-pxt-title {{
+        .hud-pxt-title {
             font-size: 2.8rem;
             font-weight: 900;
             letter-spacing: 0.28em;
             color: #ffffff;
             text-shadow: 0 0 15px rgba(56, 189, 248, 0.9), 0 0 35px rgba(56, 189, 248, 0.5), 0 0 60px rgba(14, 165, 233, 0.4);
             text-transform: uppercase;
-        }}
+        }
 
         /* Top Bar Indicators (Left Mic, Center Heard, Right Banner Dot) */
-        .top-hud-bar {{
+        .top-hud-bar {
             position: fixed;
             top: 20px;
             left: 0;
@@ -136,40 +134,40 @@ st.markdown(
             z-index: 50;
             box-sizing: border-box;
             pointer-events: none;
-        }}
+        }
 
-        .mic-dot-container {{
+        .mic-dot-container {
             display: flex;
             align-items: center;
             gap: 10px;
             pointer-events: auto;
-        }}
+        }
 
-        .green-mic-dot {{
+        .green-mic-dot {
             width: 14px;
             height: 14px;
             background: #22c55e;
             border-radius: 50%;
             box-shadow: 0 0 15px #22c55e, 0 0 25px #22c55e;
             animation: pulseGreen 1.4s infinite ease-in-out;
-        }}
+        }
 
-        @keyframes pulseGreen {{
-            0%, 100% {{ transform: scale(1); opacity: 0.8; }}
-            50% {{ transform: scale(1.35); opacity: 1; }}
-        }}
+        @keyframes pulseGreen {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.35); opacity: 1; }
+        }
 
-        .mic-label {{
+        .mic-label {
             color: #4ade80;
             font-weight: 700;
             font-size: 0.82rem;
             letter-spacing: 0.08em;
             text-transform: uppercase;
             text-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
-        }}
+        }
 
         /* Center Heard Capsule */
-        .heard-capsule {{
+        .heard-capsule {
             background: rgba(15, 23, 42, 0.75);
             border: 1px solid rgba(56, 189, 248, 0.4);
             padding: 6px 18px;
@@ -182,10 +180,10 @@ st.markdown(
             overflow: hidden;
             text-overflow: ellipsis;
             box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
-        }}
+        }
 
         /* Floating Interactive Bottom Area */
-        .kiosk-bottom-deck {{
+        .kiosk-bottom-deck {
             position: fixed;
             bottom: 4vh;
             left: 50%;
@@ -197,10 +195,10 @@ st.markdown(
             flex-direction: column;
             align-items: center;
             gap: 12px;
-        }}
+        }
 
         /* Employee Info Card */
-        .employee-glass-card {{
+        .employee-glass-card {
             background: rgba(11, 15, 25, 0.82);
             backdrop-filter: blur(25px);
             -webkit-backdrop-filter: blur(25px);
@@ -211,51 +209,51 @@ st.markdown(
             text-align: center;
             box-shadow: 0 15px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(56, 189, 248, 0.25);
             animation: slideUp 0.3s ease-out;
-        }}
+        }
 
-        @keyframes slideUp {{
-            from {{ opacity: 0; transform: translateY(20px); }}
-            to {{ opacity: 1; transform: translateY(0); }}
-        }}
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
-        .emp-name {{
+        .emp-name {
             font-size: 1.6rem;
             font-weight: 800;
             color: #ffffff;
-        }}
-        .emp-badge {{
+        }
+        .emp-badge {
             color: #38bdf8;
             font-size: 0.9rem;
             letter-spacing: 0.08em;
             margin-bottom: 0.8rem;
-        }}
-        .emp-stats-grid {{
+        }
+        .emp-stats-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 10px;
-        }}
-        .emp-stat-box {{
+        }
+        .emp-stat-box {
             background: rgba(255, 255, 255, 0.05);
             border-radius: 12px;
             padding: 0.6rem 0.3rem;
             border: 1px solid rgba(255, 255, 255, 0.08);
-        }}
-        .emp-stat-lbl {{
+        }
+        .emp-stat-lbl {
             font-size: 0.65rem;
             color: #94a3b8;
             text-transform: uppercase;
-        }}
-        .emp-stat-val {{
+        }
+        .emp-stat-val {
             font-size: 1.1rem;
             font-weight: 700;
             margin-top: 3px;
-        }}
-        .status-present {{ color: #34d399; }}
-        .status-leave {{ color: #fb923c; }}
+        }
+        .status-present { color: #34d399; }
+        .status-leave { color: #fb923c; }
 
         /* Input Controls */
-        div[data-testid="stTextInput"] {{ width: 100% !important; }}
-        div[data-testid="stTextInput"] input {{
+        div[data-testid="stTextInput"] { width: 100% !important; }
+        div[data-testid="stTextInput"] input {
             background: rgba(15, 23, 42, 0.9) !important;
             border: 1.5px solid rgba(56, 189, 248, 0.5) !important;
             border-radius: 14px !important;
@@ -264,10 +262,10 @@ st.markdown(
             font-size: 1.05rem !important;
             text-align: center;
             box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-        }}
+        }
 
         /* Buttons */
-        .stButton > button {{
+        .stButton > button {
             background: rgba(15, 23, 42, 0.9) !important;
             border: 1.5px solid rgba(56, 189, 248, 0.5) !important;
             border-radius: 999px !important;
@@ -276,20 +274,20 @@ st.markdown(
             padding: 0 1.6rem !important;
             font-weight: 700;
             box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-        }}
-        .stButton > button:hover {{
+        }
+        .stButton > button:hover {
             border-color: #38bdf8 !important;
             color: #38bdf8 !important;
-        }}
+        }
 
         /* Banner Switcher Button Top Right */
-        .banner-btn-wrap {{
+        .banner-btn-wrap {
             position: fixed;
             top: 15px;
             right: 25px;
             z-index: 100;
-        }}
-        .banner-btn-wrap .stButton > button {{
+        }
+        .banner-btn-wrap .stButton > button {
             width: 22px !important;
             height: 22px !important;
             min-height: 22px !important;
@@ -299,13 +297,18 @@ st.markdown(
             box-shadow: 0 0 15px #38bdf8, 0 0 25px #0284c7 !important;
             padding: 0 !important;
             cursor: pointer;
-        }}
+        }
     </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-    <video id="kiosk-bg-video" autoplay loop muted playsinline key="{active_video_url}">
+# Render Background Video & Center Title
+st.markdown(
+    f"""
+    <video id="kiosk-bg-video" autoplay loop muted playsinline>
         <source src="{active_video_url}" type="video/mp4">
     </video>
-
     <div class="hud-title-wrap">
         <div class="hud-pxt-title">{APP_TITLE}</div>
     </div>
@@ -353,7 +356,7 @@ def answer_employee_question(emp, question: str) -> str:
         return f"{name}, your status is {emp['Status']}, remaining leaves are {emp['RemainingLeaves']}, and next off is {emp['NextOffDay']}."
 
 
-# Auto Reset check (reset if idle for 12 seconds after result)
+# Auto Reset check
 if st.session_state.last_interaction and (time.time() - st.session_state.last_interaction > RESET_DELAY):
     st.session_state.kiosk_state = "idle"
     st.session_state.current_employee = None
@@ -380,7 +383,7 @@ st.markdown(
         <div style="width: 30px;"></div>
     </div>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 # Top Right Banner Switch Dot
