@@ -1,5 +1,5 @@
 """
-PXT HUB - Clean Cyber Kiosk with Dynamic Mic States & Theme Switcher
+PXT HUB - Clean Cyber Kiosk with Voice Recognition & Banner Switcher
 """
 
 from __future__ import annotations
@@ -44,29 +44,23 @@ st.set_page_config(
 
 
 # ============================================================
-# SESSION STATES & URL PARAMS
+# SAFE SESSION STATE INITIALIZATION
 # ============================================================
-if "active_banner" not in st.session_state:
-    st.session_state.active_banner = 1
-if "kiosk_state" not in st.session_state:
-    st.session_state.kiosk_state = "idle"
-if "current_employee" not in st.session_state:
-    st.session_state.current_employee = None
-if "last_heard" not in st.session_state:
-    st.session_state.last_heard = ""
-if "last_interaction" not in st.session_state:
-    st.session_state.last_interaction = None
+st.session_state.setdefault("active_banner", 1)
+st.session_state.setdefault("kiosk_state", "idle")
+st.session_state.setdefault("current_employee", None)
+st.session_state.setdefault("last_heard", "")
+st.session_state.setdefault("last_interaction", None)
 
-# Query param se direct toggle (theme dot button ke liye)
-params = st.query_params
-if "switch_banner" in params:
+# Handle Banner Switch from Dot
+if "switch_banner" in st.query_params:
     st.session_state.active_banner = 2 if st.session_state.active_banner == 1 else 1
-    st.query_params.clear()
+    del st.query_params["switch_banner"]
     st.rerun()
 
 
 # ============================================================
-# CSS & LAYOUT STYLING
+# CSS & STYLING
 # ============================================================
 active_video = BANNER_1_URL if st.session_state.active_banner == 1 else BANNER_2_URL
 
@@ -111,7 +105,7 @@ st.markdown(
             top: 14vh;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 20;
+            z-index: 30;
             text-align: center;
             pointer-events: none;
         }
@@ -125,20 +119,23 @@ st.markdown(
             text-transform: uppercase;
         }
 
-        /* Gale ke paas chota gray prompt */
+        /* Gale / Neck ke paas small gray text */
         .throat-prompt {
             position: fixed;
-            top: 24vh;
+            top: 32vh;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 20;
+            z-index: 35;
             color: #94a3b8;
             font-size: 0.72rem;
             letter-spacing: 0.12em;
             text-transform: uppercase;
             font-weight: 500;
             pointer-events: none;
-            opacity: 0.85;
+            background: rgba(15, 23, 42, 0.5);
+            padding: 2px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         /* Top HUD Bar */
@@ -162,7 +159,6 @@ st.markdown(
             gap: 7px;
         }
 
-        /* Red Mic dot jab chup ho */
         .red-mic-dot {
             width: 8px;
             height: 8px;
@@ -171,7 +167,6 @@ st.markdown(
             box-shadow: 0 0 8px #ef4444;
         }
 
-        /* Green Mic dot jab bol rahe hon / listening */
         .green-mic-dot {
             width: 8px;
             height: 8px;
@@ -217,13 +212,13 @@ st.markdown(
             box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
         }
 
-        /* Top Right Theme Dot Link */
+        /* Top Right Theme Dot */
         .theme-dot-anchor {
             position: fixed;
             top: 18px;
             right: 22px;
-            width: 13px;
-            height: 13px;
+            width: 14px;
+            height: 14px;
             background: #38bdf8;
             border: 1.5px solid #ffffff;
             border-radius: 50%;
@@ -234,13 +229,13 @@ st.markdown(
             display: block;
         }
 
-        /* Bottom Floating Interactive Deck */
+        /* Bottom Floating Deck */
         .kiosk-bottom-deck {
             position: fixed;
             bottom: 3.5vh;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 40;
+            z-index: 50;
             width: 88%;
             max-width: 480px;
             display: flex;
@@ -328,7 +323,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Background Video, Title & Throat Prompt
+# Background Video & PXT HUB Title
 st.markdown(
     f"""
     <video id="kiosk-bg-video" autoplay loop muted playsinline key="{active_video}">
@@ -337,25 +332,28 @@ st.markdown(
     <div class="hud-title-wrap">
         <div class="hud-pxt-title">{APP_TITLE}</div>
     </div>
-    <div class="throat-prompt">Say "Hi PXT"</div>
     """,
     unsafe_allow_html=True,
 )
 
-# Top Right Theme Switcher Dot (Direct link, guaranteed to show)
+# Gale ke paas subtle text (sirf idle state mein)
+if st.session_state.get("kiosk_state") == "idle":
+    st.markdown('<div class="throat-prompt">Say "Hi PXT"</div>', unsafe_allow_html=True)
+
+# Top Right Theme Dot Link
 st.markdown(
     """<a href="?switch_banner=true" target="_self" class="theme-dot-anchor" title="Switch Theme"></a>""",
     unsafe_allow_html=True,
 )
 
-# Top HUD Bar (Mic State: Red by default, Green when listening/active)
-is_active_listening = bool(st.session_state.last_heard.strip())
+# Top HUD Bar (Mic Indicator: Red default, Green jab koi awaz capture ho)
+last_heard_text = st.session_state.get("last_heard", "").strip()
 
-if is_active_listening:
+if last_heard_text:
     dot_class = "green-mic-dot"
     label_class = "mic-label-green"
-    label_text = "LISTENING"
-    heard_pill = f'<div class="heard-capsule">Heard: {st.session_state.last_heard}</div>'
+    label_text = "LISTENING..."
+    heard_pill = f'<div class="heard-capsule">Heard: {last_heard_text}</div>'
 else:
     dot_class = "red-mic-dot"
     label_class = "mic-label-red"
@@ -416,12 +414,13 @@ def answer_employee_question(emp, question: str) -> str:
         return f"{name}, your status is {emp['Status']}, remaining leaves are {emp['RemainingLeaves']}, and next off is {emp['NextOffDay']}."
 
 
-# Auto Reset check
-if st.session_state.last_interaction and (time.time() - st.session_state.last_interaction > RESET_DELAY):
-    st.session_state.kiosk_state = "idle"
-    st.session_state.current_employee = None
-    st.session_state.last_interaction = None
-    st.session_state.last_heard = ""
+# Safe Auto Reset
+last_act = st.session_state.get("last_interaction", None)
+if last_act and (time.time() - last_act > RESET_DELAY):
+    st.session_state["kiosk_state"] = "idle"
+    st.session_state["current_employee"] = None
+    st.session_state["last_interaction"] = None
+    st.session_state["last_heard"] = ""
     st.rerun()
 
 staff_df = load_data()
@@ -433,7 +432,7 @@ staff_df = load_data()
 st.markdown('<div class="kiosk-bottom-deck">', unsafe_allow_html=True)
 
 # 1. IDLE STATE
-if st.session_state.kiosk_state == "idle":
+if st.session_state.get("kiosk_state") == "idle":
     spoken = None
     if MIC_AVAILABLE:
         spoken = speech_to_text(
@@ -448,14 +447,14 @@ if st.session_state.kiosk_state == "idle":
             spoken = "Hi PXT"
 
     if spoken:
-        st.session_state.last_heard = spoken
-        st.session_state.kiosk_state = "asked_badge"
-        st.session_state.last_interaction = time.time()
+        st.session_state["last_heard"] = spoken
+        st.session_state["kiosk_state"] = "asked_badge"
+        st.session_state["last_interaction"] = time.time()
         speak("Hello! Please enter your Badge Number.")
         st.rerun()
 
 # 2. ASKED BADGE STATE
-elif st.session_state.kiosk_state == "asked_badge":
+elif st.session_state.get("kiosk_state") == "asked_badge":
     badge_in = st.text_input(
         "badge_in",
         placeholder="Enter Badge No (e.g. EMP011)",
@@ -476,16 +475,16 @@ elif st.session_state.kiosk_state == "asked_badge":
     active_badge = badge_voice if badge_voice else badge_in
 
     if active_badge:
-        st.session_state.last_heard = active_badge
+        st.session_state["last_heard"] = active_badge
         q = active_badge.strip().lower().replace(" ", "")
         match = staff_df[staff_df["EmployeeID"].str.lower().str.replace(" ", "") == q]
         if match.empty:
             match = staff_df[staff_df["Name"].str.lower().str.contains(active_badge.strip().lower())]
 
         if not match.empty:
-            st.session_state.current_employee = match.iloc[0]
-            st.session_state.kiosk_state = "employee_active"
-            st.session_state.last_interaction = time.time()
+            st.session_state["current_employee"] = match.iloc[0]
+            st.session_state["kiosk_state"] = "employee_active"
+            st.session_state["last_interaction"] = time.time()
             welcome_msg = f"Welcome {match.iloc[0]['Name']}. How can I help you?"
             speak(welcome_msg)
             st.rerun()
@@ -493,8 +492,8 @@ elif st.session_state.kiosk_state == "asked_badge":
             st.error("Badge Number not found. Try again.")
 
 # 3. EMPLOYEE ACTIVE STATE
-elif st.session_state.kiosk_state == "employee_active":
-    emp = st.session_state.current_employee
+elif st.session_state.get("kiosk_state") == "employee_active":
+    emp = st.session_state.get("current_employee")
     status_cls = "status-present" if "present" in emp["Status"].lower() else "status-leave"
 
     st.markdown(
@@ -542,8 +541,8 @@ elif st.session_state.kiosk_state == "employee_active":
 
     active_question = question_voice if question_voice else question_text
     if active_question:
-        st.session_state.last_heard = active_question
-        st.session_state.last_interaction = time.time()
+        st.session_state["last_heard"] = active_question
+        st.session_state["last_interaction"] = time.time()
         ans = answer_employee_question(emp, active_question)
         speak(ans)
 
