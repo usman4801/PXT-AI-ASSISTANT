@@ -1,7 +1,7 @@
 """
 PXT Hub - AI Voice Assistant
-A workplace kiosk dashboard for staff attendance/leave lookup with voice search
-and an admin panel for CSV-based data management.
+A dark-themed, kiosk-style workplace dashboard for staff attendance/leave
+lookup via text or voice, with a hidden admin panel for CSV data management.
 """
 
 from __future__ import annotations
@@ -30,13 +30,259 @@ except ImportError:
 # ============================================================
 # CONFIG
 # ============================================================
-APP_TITLE = "PXT Hub - AI Voice Assistant"
+APP_TITLE = "PXT Hub"
+APP_SUBTITLE = "AI Voice Assistant"
 DATA_FILE = "staff_data.csv"
 ADMIN_PASSWORD = "pxt123"
 BANNER_URL = "https://raw.githubusercontent.com/usman4801/PXT-AI-ASSISTANT/main/banner.mp4"
 REQUIRED_COLUMNS = ["EmployeeID", "Name", "Status", "RemainingLeaves", "NextOffDay", "Aliases"]
 
-st.set_page_config(page_title=APP_TITLE, page_icon="🎙️", layout="wide")
+st.set_page_config(
+    page_title=f"{APP_TITLE} - {APP_SUBTITLE}",
+    page_icon="🎙️",
+    layout="centered",
+    initial_sidebar_state="collapsed",
+)
+
+
+# ============================================================
+# KIOSK DARK THEME (CSS INJECTION)
+# ============================================================
+def inject_kiosk_css() -> None:
+    st.markdown(
+        """
+        <style>
+            /* ---- Hide Streamlit chrome ---- */
+            #MainMenu {visibility: hidden;}
+            header[data-testid="stHeader"] {display: none;}
+            footer {visibility: hidden;}
+            div[data-testid="stToolbar"] {visibility: hidden; height: 0;}
+            div[data-testid="stDecoration"] {display: none;}
+            div[data-testid="stStatusWidget"] {visibility: hidden;}
+            [data-testid="collapsedControl"] {
+                opacity: 0.35;
+                transition: opacity 0.2s ease;
+            }
+            [data-testid="collapsedControl"]:hover {opacity: 1;}
+
+            /* ---- Global kiosk background ---- */
+            html, body, [data-testid="stAppViewContainer"], .stApp {
+                background: radial-gradient(circle at 50% 0%, #10141f 0%, #05070c 55%, #05070c 100%);
+                color: #e9edf5;
+                font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            }
+            [data-testid="stAppViewContainer"] > .main {
+                padding-top: 1.2rem;
+            }
+            .block-container {
+                padding-top: 1.5rem;
+                padding-bottom: 3rem;
+                max-width: 820px;
+            }
+
+            /* ---- Sidebar (admin) styling ---- */
+            section[data-testid="stSidebar"] {
+                background: #0a0d14;
+                border-right: 1px solid rgba(255,255,255,0.06);
+            }
+            section[data-testid="stSidebar"] * {
+                color: #e9edf5;
+            }
+
+            /* ---- Kiosk header ---- */
+            .kiosk-eyebrow {
+                text-align: center;
+                letter-spacing: 0.35em;
+                font-size: 0.72rem;
+                font-weight: 600;
+                color: #7c8aa8;
+                text-transform: uppercase;
+                margin-bottom: 0.2rem;
+            }
+            .kiosk-title {
+                text-align: center;
+                font-size: 2.4rem;
+                font-weight: 800;
+                margin: 0 0 0.3rem 0;
+                background: linear-gradient(90deg, #7ee0ff 0%, #b998ff 55%, #ff9ed8 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            }
+            .kiosk-subtitle {
+                text-align: center;
+                color: #8a93ab;
+                font-size: 0.95rem;
+                margin-bottom: 1.6rem;
+            }
+
+            /* ---- Video banner wrapper ---- */
+            .kiosk-video-wrapper {
+                position: relative;
+                width: 100%;
+                border-radius: 22px;
+                overflow: hidden;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.05);
+                margin-bottom: 1.8rem;
+            }
+            .kiosk-video-wrapper video {
+                width: 100%;
+                height: auto;
+                max-height: 320px;
+                object-fit: cover;
+                display: block;
+                pointer-events: none;
+            }
+            .kiosk-video-wrapper::after {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(180deg, rgba(5,7,12,0) 55%, rgba(5,7,12,0.85) 100%);
+            }
+
+            /* ---- Section labels ---- */
+            .kiosk-section-label {
+                text-align: center;
+                color: #7c8aa8;
+                font-size: 0.8rem;
+                font-weight: 600;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                margin: 0.4rem 0 0.8rem 0;
+            }
+
+            /* ---- Search input ---- */
+            div[data-testid="stTextInput"] input {
+                background: rgba(255,255,255,0.06) !important;
+                border: 1px solid rgba(255,255,255,0.12) !important;
+                border-radius: 16px !important;
+                color: #f2f4fa !important;
+                padding: 0.85rem 1.1rem !important;
+                font-size: 1.05rem !important;
+                height: 3.2rem;
+            }
+            div[data-testid="stTextInput"] input:focus {
+                border-color: #7ee0ff !important;
+                box-shadow: 0 0 0 3px rgba(126,224,255,0.15) !important;
+            }
+            div[data-testid="stTextInput"] input::placeholder {
+                color: #5f6a85 !important;
+            }
+
+            /* ---- Buttons (mic + generic) ---- */
+            .stButton > button, .stFormSubmitButton > button {
+                background: linear-gradient(135deg, #2a3454 0%, #1a2036 100%);
+                color: #f2f4fa;
+                border: 1px solid rgba(255,255,255,0.12);
+                border-radius: 16px;
+                height: 3.2rem;
+                font-weight: 600;
+                font-size: 1.0rem;
+                transition: all 0.15s ease;
+            }
+            .stButton > button:hover, .stFormSubmitButton > button:hover {
+                border-color: #7ee0ff;
+                box-shadow: 0 0 0 3px rgba(126,224,255,0.15);
+                color: #7ee0ff;
+            }
+
+            /* mic_recorder widget buttons */
+            div[data-testid="stHorizontalBlock"] button {
+                border-radius: 16px !important;
+            }
+
+            /* ---- Result card (glassmorphism) ---- */
+            .kiosk-card {
+                background: rgba(255,255,255,0.05);
+                backdrop-filter: blur(18px);
+                -webkit-backdrop-filter: blur(18px);
+                border: 1px solid rgba(255,255,255,0.10);
+                border-radius: 24px;
+                padding: 1.8rem 2rem;
+                margin-top: 1.4rem;
+                box-shadow: 0 15px 45px rgba(0,0,0,0.45);
+            }
+            .kiosk-card-name {
+                font-size: 1.7rem;
+                font-weight: 800;
+                color: #ffffff;
+                margin-bottom: 0.15rem;
+            }
+            .kiosk-status-pill {
+                display: inline-block;
+                padding: 0.28rem 0.9rem;
+                border-radius: 999px;
+                font-size: 0.82rem;
+                font-weight: 700;
+                letter-spacing: 0.03em;
+                margin-bottom: 1.2rem;
+            }
+            .status-present {
+                background: rgba(56, 224, 148, 0.16);
+                color: #4ee6a4;
+                border: 1px solid rgba(78, 230, 164, 0.35);
+            }
+            .status-leave {
+                background: rgba(255, 158, 91, 0.16);
+                color: #ffb877;
+                border: 1px solid rgba(255, 184, 119, 0.35);
+            }
+            .status-other {
+                background: rgba(126, 224, 255, 0.14);
+                color: #7ee0ff;
+                border: 1px solid rgba(126, 224, 255, 0.35);
+            }
+
+            .kiosk-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 0.9rem;
+                margin-top: 0.4rem;
+            }
+            .kiosk-stat {
+                background: rgba(255,255,255,0.04);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 16px;
+                padding: 0.85rem 1rem;
+            }
+            .kiosk-stat-label {
+                font-size: 0.72rem;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: #7c8aa8;
+                margin-bottom: 0.25rem;
+            }
+            .kiosk-stat-value {
+                font-size: 1.15rem;
+                font-weight: 700;
+                color: #f2f4fa;
+            }
+
+            /* ---- Alerts restyled dark ---- */
+            div[data-testid="stAlert"] {
+                background: rgba(255,255,255,0.05);
+                border-radius: 16px;
+                border: 1px solid rgba(255,255,255,0.10);
+            }
+
+            /* ---- Footer ---- */
+            .kiosk-footer {
+                text-align: center;
+                color: #4c5670;
+                font-size: 0.78rem;
+                margin-top: 2.5rem;
+                letter-spacing: 0.04em;
+            }
+
+            audio {
+                width: 100%;
+                margin-top: 1rem;
+                border-radius: 12px;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ============================================================
@@ -165,6 +411,15 @@ def build_speech_text(row) -> str:
     )
 
 
+def status_pill_class(status: str) -> str:
+    s = str(status).strip().lower()
+    if "present" in s:
+        return "status-present"
+    if "leave" in s or "off" in s:
+        return "status-leave"
+    return "status-other"
+
+
 # ============================================================
 # SESSION STATE
 # ============================================================
@@ -175,19 +430,26 @@ if "admin_authenticated" not in st.session_state:
 
 
 # ============================================================
-# SIDEBAR - ADMIN PANEL
+# APPLY THEME
+# ============================================================
+inject_kiosk_css()
+
+
+# ============================================================
+# SIDEBAR - HIDDEN ADMIN PANEL
 # ============================================================
 with st.sidebar:
-    st.header("🔐 Admin Panel")
+    st.markdown("### 🔐 Admin Access")
 
     if not st.session_state.admin_authenticated:
-        pwd = st.text_input("Admin password", type="password", key="admin_pwd")
-        if st.button("Login", use_container_width=True):
-            if pwd == ADMIN_PASSWORD:
-                st.session_state.admin_authenticated = True
-                st.rerun()
-            else:
-                st.error("Incorrect password.")
+        with st.expander("Staff data management", expanded=False):
+            pwd = st.text_input("Admin password", type="password", key="admin_pwd")
+            if st.button("Login", use_container_width=True):
+                if pwd == ADMIN_PASSWORD:
+                    st.session_state.admin_authenticated = True
+                    st.rerun()
+                else:
+                    st.error("Incorrect password.")
     else:
         st.success("Authenticated as admin.")
 
@@ -196,7 +458,7 @@ with st.sidebar:
             st.rerun()
 
         st.divider()
-        st.subheader("Upload updated staff CSV")
+        st.markdown("**Upload updated staff CSV**")
         st.caption(f"Required columns: {', '.join(REQUIRED_COLUMNS)}")
 
         uploaded = st.file_uploader("Choose a CSV file", type=["csv"])
@@ -211,40 +473,52 @@ with st.sidebar:
                     st.error(message)
 
         st.divider()
-        st.subheader("Current dataset preview")
+        st.markdown("**Current dataset preview**")
         current_df = load_staff_data(DATA_FILE, get_file_mtime(DATA_FILE))
         st.dataframe(current_df, use_container_width=True, hide_index=True)
         st.caption(f"{len(current_df)} record(s) loaded.")
 
 
 # ============================================================
-# MAIN PAGE - BANNER
+# MAIN PAGE - HEADER
 # ============================================================
-st.title(APP_TITLE)
+st.markdown('<div class="kiosk-eyebrow">Workplace Assistant</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="kiosk-title">{APP_TITLE} · {APP_SUBTITLE}</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="kiosk-subtitle">Ask about attendance, leave balances, and off days — by voice or text.</div>',
+    unsafe_allow_html=True,
+)
 
-try:
-    st.video(BANNER_URL)
-except Exception:
-    st.info("Banner video is currently unavailable.")
 
-st.divider()
+# ============================================================
+# MAIN PAGE - SEAMLESS VIDEO BANNER (raw HTML5 <video>)
+# ============================================================
+st.markdown(
+    f"""
+    <div class="kiosk-video-wrapper">
+        <video autoplay loop muted playsinline>
+            <source src="{BANNER_URL}" type="video/mp4">
+        </video>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # ============================================================
 # MAIN PAGE - SEARCH
 # ============================================================
-st.subheader("🔍 Find a colleague")
-st.caption("Search by name, employee ID, or known alias — by typing or speaking.")
+st.markdown('<div class="kiosk-section-label">🔍 Find a colleague</div>', unsafe_allow_html=True)
 
 staff_df = load_staff_data(DATA_FILE, get_file_mtime(DATA_FILE))
 
-col_text, col_mic = st.columns([5, 1])
+col_text, col_mic = st.columns([4, 1])
 
 with col_text:
     text_query = st.text_input(
         "Search",
         value=st.session_state.search_query,
-        placeholder="e.g. Ayesha, EMP001, or an alias",
+        placeholder="Type a name, Employee ID, or alias…",
         label_visibility="collapsed",
         key="text_query_input",
     )
@@ -254,14 +528,15 @@ with col_mic:
     if MIC_AVAILABLE:
         voice_text = speech_to_text(
             language="en",
-            start_prompt="🎤",
-            stop_prompt="⏹️",
+            start_prompt="🎤 Speak",
+            stop_prompt="⏹️ Stop",
             just_once=True,
             use_container_width=True,
             key="mic_recorder",
         )
     else:
-        st.button("🎤", disabled=True, help="Install streamlit-mic-recorder to enable voice input")
+        st.button("🎤 Speak", disabled=True, use_container_width=True,
+                   help="Install streamlit-mic-recorder to enable voice input")
 
 # Voice input takes priority and auto-populates + triggers the search
 active_query = text_query
@@ -269,8 +544,6 @@ if voice_text:
     active_query = voice_text
     st.session_state.search_query = voice_text
     st.rerun()
-
-st.divider()
 
 
 # ============================================================
@@ -282,31 +555,45 @@ if active_query and active_query.strip():
     if results.empty:
         st.warning(f"No staff record found matching **'{active_query}'**.")
     else:
-        st.success(f"Found {len(results)} matching record(s).")
-
         for _, row in results.iterrows():
-            with st.container(border=True):
-                st.markdown(f"### {row['Name']}")
+            pill_class = status_pill_class(row["Status"])
+            st.markdown(
+                f"""
+                <div class="kiosk-card">
+                    <div class="kiosk-card-name">{row['Name']}</div>
+                    <span class="kiosk-status-pill {pill_class}">{row['Status']}</span>
+                    <div class="kiosk-grid">
+                        <div class="kiosk-stat">
+                            <div class="kiosk-stat-label">Employee ID</div>
+                            <div class="kiosk-stat-value">{row['EmployeeID']}</div>
+                        </div>
+                        <div class="kiosk-stat">
+                            <div class="kiosk-stat-label">Remaining Leaves</div>
+                            <div class="kiosk-stat-value">{row['RemainingLeaves']}</div>
+                        </div>
+                        <div class="kiosk-stat">
+                            <div class="kiosk-stat-label">Next Off Day</div>
+                            <div class="kiosk-stat-value">{row['NextOffDay']}</div>
+                        </div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Employee ID", row["EmployeeID"])
-                c2.metric("Status", row["Status"])
-                c3.metric("Remaining Leaves", row["RemainingLeaves"])
-                c4.metric("Next Off Day", row["NextOffDay"])
-
-                if TTS_AVAILABLE:
-                    speech_text = build_speech_text(row)
-                    audio_buf = generate_speech(speech_text)
-                    if audio_buf is not None:
-                        st.audio(audio_buf, format="audio/mp3")
-                else:
-                    st.caption("Install `gTTS` to enable spoken confirmations.")
+            if TTS_AVAILABLE:
+                speech_text = build_speech_text(row)
+                audio_buf = generate_speech(speech_text)
+                if audio_buf is not None:
+                    st.audio(audio_buf, format="audio/mp3")
 else:
-    st.info("Type a name/ID above or tap the microphone to search for a colleague.")
+    st.info("Type a name/ID above or tap **Speak** to search for a colleague.")
 
 
 # ============================================================
 # FOOTER
 # ============================================================
-st.divider()
-st.caption(f"PXT Hub · Data last checked {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.markdown(
+    f'<div class="kiosk-footer">PXT Hub · Kiosk session started {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div>',
+    unsafe_allow_html=True,
+)
