@@ -1,6 +1,5 @@
 """
-PXT HUB - AI Voice Assistant
-Original Banner Layout with Glowing Video Frame, Mic & Floating Data Card
+PXT HUB - AI Voice Assistant (Edge-to-Edge True Fullscreen UI)
 """
 
 from __future__ import annotations
@@ -42,46 +41,55 @@ LANGUAGE_OPTIONS = {
     "English": "en"
 }
 
+# MUST BE WIDE FOR FULLSCREEN
 st.set_page_config(
     page_title=f"{APP_TITLE} - AI Assistant",
     page_icon="🎙️",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 
 # ============================================================
-# CSS STYLING (MATCHING EXACT ORIGINAL UI)
+# CSS STYLING (TRUE EDGE-TO-EDGE FULLSCREEN)
 # ============================================================
 def inject_custom_css() -> None:
     st.markdown(
         """
         <style>
-            /* 1. Header / Streamlit UI hide */
+            /* 1. Streamlit headers & chrome remove */
             #MainMenu, header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"] {
                 display: none !important;
                 visibility: hidden !important;
             }
             [data-testid="collapsedControl"] {
-                opacity: 0.2;
+                opacity: 0.15;
                 transition: opacity 0.3s ease;
             }
             [data-testid="collapsedControl"]:hover {
                 opacity: 1;
             }
 
-            /* 2. Global Dark Theme */
+            /* 2. Global Dark Stage & ZERO Padding for full stretch */
             html, body, [data-testid="stAppViewContainer"], .stApp {
-                background: #060913 !important;
+                background: #03060f !important;
                 color: #ffffff !important;
                 font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+                overflow-x: hidden !important;
             }
 
+            /* REMOVE ALL STREAMLIT MAX-WIDTH & SIDE PADDINGS */
+            .main, [data-testid="stAppViewContainer"] > .main {
+                padding: 0 !important;
+            }
             .main .block-container {
-                max-width: 680px !important;
-                padding-top: 1.8rem !important;
+                max-width: 100% !important;
+                width: 100% !important;
+                padding-top: 1rem !important;
                 padding-bottom: 2rem !important;
-                margin: 0 auto !important;
+                padding-left: 2vw !important;
+                padding-right: 2vw !important;
+                margin: 0 !important;
             }
 
             /* 3. Title */
@@ -89,31 +97,32 @@ def inject_custom_css() -> None:
                 text-align: center;
                 font-size: 2.2rem;
                 font-weight: 900;
-                letter-spacing: 0.18em;
+                letter-spacing: 0.22em;
                 color: #ffffff;
                 text-transform: uppercase;
-                margin-bottom: 1.2rem;
-                text-shadow: 0 0 15px rgba(56, 189, 248, 0.75), 0 0 30px rgba(56, 189, 248, 0.3);
+                margin-top: 0.5rem;
+                margin-bottom: 1rem;
+                text-shadow: 0 0 16px rgba(56, 189, 248, 0.8), 0 0 35px rgba(56, 189, 248, 0.4);
             }
 
-            /* 4. Center Video Banner Frame */
+            /* 4. TRUE FULLSCREEN VIDEO BANNER */
             .video-frame-wrap {
-                width: 100%;
-                max-width: 650px;
+                width: 96vw;
+                max-width: 1400px;
                 margin: 0 auto 1.4rem auto;
-                border-radius: 22px;
+                border-radius: 26px;
                 overflow: hidden;
-                border: 1.5px solid rgba(56, 189, 248, 0.45);
-                box-shadow: 0 0 35px rgba(56, 189, 248, 0.28), 0 10px 30px rgba(0, 0, 0, 0.7);
+                border: 2px solid rgba(56, 189, 248, 0.5);
+                box-shadow: 0 0 45px rgba(56, 189, 248, 0.35), 0 15px 40px rgba(0, 0, 0, 0.85);
                 background: #000000;
             }
 
             .video-frame-wrap video {
                 width: 100%;
-                height: auto;
+                height: 52vh;
+                min-height: 380px;
                 display: block;
                 object-fit: cover;
-                max-height: 340px;
             }
 
             /* 5. Status Pill */
@@ -125,23 +134,24 @@ def inject_custom_css() -> None:
             .status-pill {
                 display: inline-flex;
                 align-items: center;
-                gap: 9px;
-                padding: 0.45rem 1.4rem;
+                gap: 10px;
+                padding: 0.45rem 1.6rem;
                 border-radius: 999px;
-                background: rgba(15, 23, 42, 0.8);
-                border: 1px solid rgba(56, 189, 248, 0.35);
-                box-shadow: 0 0 18px rgba(56, 189, 248, 0.2);
-                font-size: 0.88rem;
-                font-weight: 500;
+                background: rgba(15, 23, 42, 0.85);
+                border: 1px solid rgba(56, 189, 248, 0.4);
+                box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+                font-size: 0.92rem;
+                font-weight: 600;
                 color: #cbebff;
+                letter-spacing: 0.03em;
             }
 
             .status-dot {
-                width: 8px;
-                height: 8px;
+                width: 9px;
+                height: 9px;
                 border-radius: 50%;
                 background: #38bdf8;
-                box-shadow: 0 0 10px #38bdf8;
+                box-shadow: 0 0 12px #38bdf8;
                 animation: pulseGlow 1.5s infinite ease-in-out;
             }
 
@@ -150,114 +160,101 @@ def inject_custom_css() -> None:
                 50% { transform: scale(1.4); opacity: 1; }
             }
 
-            /* 6. Language Radio alignment */
+            /* 6. Controls Center Container */
+            .controls-container {
+                max-width: 720px;
+                margin: 0 auto;
+            }
+
+            /* 7. Radio Buttons */
             div[role="radiogroup"] {
                 justify-content: center !important;
                 margin-bottom: 1rem !important;
-                gap: 1.5rem !important;
+                gap: 2rem !important;
             }
 
             div[role="radiogroup"] label {
                 color: #cbd5e1 !important;
-                font-size: 0.95rem !important;
+                font-size: 1rem !important;
             }
 
-            /* 7. Search Input & Button */
+            /* 8. Search Input & Buttons */
             div[data-testid="stTextInput"] input {
                 background: rgba(15, 23, 42, 0.85) !important;
-                border: 1px solid rgba(56, 189, 248, 0.35) !important;
-                border-radius: 14px !important;
+                border: 1.5px solid rgba(56, 189, 248, 0.4) !important;
+                border-radius: 16px !important;
                 color: #ffffff !important;
-                height: 3.1rem;
-                font-size: 0.98rem !important;
-                padding-left: 1rem !important;
-                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+                height: 3.3rem;
+                font-size: 1.05rem !important;
+                padding-left: 1.2rem !important;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
             }
 
             div[data-testid="stTextInput"] input:focus {
                 border-color: #38bdf8 !important;
-                box-shadow: 0 0 15px rgba(56, 189, 248, 0.4) !important;
+                box-shadow: 0 0 20px rgba(56, 189, 248, 0.5) !important;
             }
 
             .stButton > button {
                 background: #1e293b !important;
-                border: 1px solid rgba(56, 189, 248, 0.4) !important;
-                border-radius: 14px !important;
+                border: 1.5px solid rgba(56, 189, 248, 0.45) !important;
+                border-radius: 16px !important;
                 color: #ffffff !important;
-                height: 3.1rem !important;
-                font-weight: 600;
-                font-size: 0.95rem;
+                height: 3.3rem !important;
+                font-weight: 700;
+                font-size: 1rem;
                 transition: all 0.2s ease;
             }
 
             .stButton > button:hover {
                 border-color: #38bdf8 !important;
-                box-shadow: 0 0 15px rgba(56, 189, 248, 0.4) !important;
+                box-shadow: 0 0 20px rgba(56, 189, 248, 0.5) !important;
                 color: #38bdf8 !important;
-            }
-
-            /* 8. Bottom Helper Text */
-            .guide-wrap {
-                text-align: center;
-                margin-top: 1.4rem;
-                margin-bottom: 1rem;
-            }
-
-            .guide-main {
-                font-size: 1.25rem;
-                font-weight: 700;
-                color: #f8fafc;
-                margin-bottom: 0.3rem;
-            }
-
-            .guide-sub {
-                font-size: 0.88rem;
-                color: #94a3b8;
             }
 
             /* 9. Employee Result Card */
             .result-card {
-                background: rgba(15, 23, 42, 0.85);
-                backdrop-filter: blur(16px);
-                -webkit-backdrop-filter: blur(16px);
-                border: 1px solid rgba(56, 189, 248, 0.4);
-                border-radius: 20px;
-                padding: 1.4rem 1.8rem;
+                background: rgba(15, 23, 42, 0.88);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                border: 1.5px solid rgba(56, 189, 248, 0.45);
+                border-radius: 22px;
+                padding: 1.6rem 2.2rem;
                 margin: 1.2rem auto;
-                max-width: 580px;
+                max-width: 620px;
                 text-align: center;
-                box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 25px rgba(56, 189, 248, 0.2);
+                box-shadow: 0 20px 45px rgba(0, 0, 0, 0.7), 0 0 30px rgba(56, 189, 248, 0.25);
             }
 
             .card-name {
-                font-size: 1.6rem;
+                font-size: 1.8rem;
                 font-weight: 800;
                 color: #ffffff;
             }
 
             .card-id {
                 color: #94a3b8;
-                font-size: 0.85rem;
+                font-size: 0.9rem;
                 letter-spacing: 0.08em;
-                margin-bottom: 1rem;
+                margin-bottom: 1.1rem;
             }
 
             .stats-row {
                 display: grid;
                 grid-template-columns: repeat(3, 1fr);
-                gap: 0.8rem;
-                margin-top: 0.8rem;
+                gap: 0.9rem;
+                margin-top: 0.9rem;
             }
 
             .stat-box {
-                background: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 12px;
-                padding: 0.7rem 0.4rem;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 14px;
+                padding: 0.8rem 0.5rem;
             }
 
             .stat-lbl {
-                font-size: 0.68rem;
+                font-size: 0.72rem;
                 text-transform: uppercase;
                 letter-spacing: 0.08em;
                 color: #94a3b8;
@@ -265,7 +262,7 @@ def inject_custom_css() -> None:
             }
 
             .stat-val {
-                font-size: 1.15rem;
+                font-size: 1.2rem;
                 font-weight: 700;
             }
 
@@ -273,10 +270,29 @@ def inject_custom_css() -> None:
             .status-leave { color: #fb923c; }
             .status-other { color: #38bdf8; }
 
+            /* 10. Bottom Helper Text */
+            .guide-wrap {
+                text-align: center;
+                margin-top: 1.4rem;
+                margin-bottom: 1rem;
+            }
+
+            .guide-main {
+                font-size: 1.3rem;
+                font-weight: 700;
+                color: #f8fafc;
+                margin-bottom: 0.35rem;
+            }
+
+            .guide-sub {
+                font-size: 0.92rem;
+                color: #94a3b8;
+            }
+
             audio {
                 width: 100%;
                 margin-top: 0.8rem;
-                border-radius: 10px;
+                border-radius: 12px;
             }
         </style>
         """,
@@ -348,7 +364,7 @@ def search_staff(df: pd.DataFrame, query: str) -> pd.DataFrame:
 
 
 # ============================================================
-# SPEECH / VOICE OUTPUT
+# VOICE OUTPUT
 # ============================================================
 def generate_speech(text: str, lang_code: str = "hi"):
     if not TTS_AVAILABLE:
@@ -452,7 +468,7 @@ staff_df = load_staff_data(DATA_FILE, get_file_mtime(DATA_FILE))
 # 1. PXT HUB Title
 st.markdown(f'<div class="pxt-title">{APP_TITLE}</div>', unsafe_allow_html=True)
 
-# 2. Glowing Banner Video
+# 2. FULLSCREEN STRETCHED VIDEO BANNER
 st.markdown(
     f"""
     <div class="video-frame-wrap">
@@ -481,7 +497,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 4. Language Selector
+# 4. Center Controls Container
+st.markdown('<div class="controls-container">', unsafe_allow_html=True)
+
+# Language Selector
 selected_lang = st.radio(
     "Language",
     list(LANGUAGE_OPTIONS.keys()),
@@ -491,7 +510,7 @@ selected_lang = st.radio(
 )
 st.session_state.active_lang = selected_lang
 
-# 5. Search Controls (Text input & Speak button)
+# Search Controls
 reset_idx = st.session_state.reset_counter
 col_input, col_speak = st.columns([4, 1])
 
@@ -518,6 +537,8 @@ with col_speak:
     else:
         st.button("🎤 Speak", disabled=True, use_container_width=True)
 
+st.markdown('</div>', unsafe_allow_html=True)
+
 # Input event triggers
 if spoken_result:
     st.session_state.prefill_query = spoken_result
@@ -531,7 +552,7 @@ if text_val and text_val != st.session_state.prefill_query:
     st.rerun()
 
 
-# 6. Results & Data Card Display
+# 5. Results & Data Card Display
 active_query = st.session_state.prefill_query
 results = search_staff(staff_df, active_query) if (active_query and active_query.strip()) else pd.DataFrame()
 
@@ -578,7 +599,7 @@ if not results.empty:
     if not st.session_state.admin_authenticated:
         inject_auto_reset(RESET_DELAY_SECONDS)
 
-# 7. Helper Guidance text at the bottom
+# 6. Helper Guidance text at the bottom
 if results.empty:
     st.markdown(
         """
