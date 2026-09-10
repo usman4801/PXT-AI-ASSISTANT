@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PXT Kiosk</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, sans-serif; }
+    body { background-color: #05070c; color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow-x: hidden; }
+    .container { width: 90%; max-width: 900px; text-align: center; padding: 20px; }
+    video.banner { width: 100%; max-height: 250px; object-fit: cover; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+    h1 { font-size: 2.2rem; margin-bottom: 10px; color: #f3f4f6; }
+    p.subtitle { color: #9ca3af; font-size: 1.1rem; margin-bottom: 25px; }
+    .search-box { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; }
+    input[type="text"] { width: 60%; padding: 14px 20px; font-size: 1.1rem; border-radius: 30px; border: 1px solid #374151; background: #111827; color: #fff; outline: none; transition: 0.3s; }
+    input[type="text"]:focus { border-color: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.5); }
+    button { padding: 12px 24px; font-size: 1.1rem; border-radius: 30px; border: none; background: #2563eb; color: #fff; cursor: pointer; transition: 0.3s; display: flex; align-items: center; gap: 8px; }
+    button:hover { background: #1d4ed8; }
+    button.mic-btn { background: #ef4444; }
+    button.mic-btn.listening { animation: pulse 1.5s infinite; background: #dc2626; }
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+    .card { display: none; background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 25px; text-align: left; margin-top: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); }
+    .card h2 { color: #60a5fa; margin-bottom: 15px; font-size: 1.5rem; }
+    .card-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #1f2937; }
+    .card-row:last-child { border-bottom: none; }
+    .card-row span.label { color: #9ca3af; font-weight: 500; }
+    .card-row span.val { color: #f9fafb; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <video class="banner" src="__VIDEO__" autoplay loop muted playsinline></video>
+    <h1>PXT AI Assistant</h1>
+    <p class="subtitle">Search by Name, ID, or Voice</p>
+
+    <div class="search-box">
+      <input type="text" id="queryInput" placeholder="Enter Name or ID..." onkeypress="if(event.key==='Enter') searchStaff()">
+      <button onclick="searchStaff()">Search</button>
+      <button id="micBtn" class="mic-btn" onclick="toggleMic()">🎤 Mic</button>
+    </div>
+
+    <div id="resultCard" class="card">
+      <h2 id="empName">Employee Name</h2>
+      <div class="card-row"><span class="label">Employee ID:</span><span class="val" id="empId">-</span></div>
+      <div class="card-row"><span class="label">Status:</span><span class="val" id="empStatus">-</span></div>
+      <div class="card-row"><span class="label">Remaining Leaves:</span><span class="val" id="empLeaves">-</span></div>
+      <div class="card-row"><span class="label">Next Off Day:</span><span class="val" id="empNextOff">-</span></div>
+    </div>
+  </div>
+
+  <script>
+    const staffData = __STAFF__;
+
+    function searchStaff(query) {
+      const q = (query || document.getElementById('queryInput').value).trim().toLowerCase();
+      if (!q) return;
+
+      const found = staffData.find(item => {
+        if (item.id.toLowerCase() === q) return true;
+        if (item.name.toLowerCase().includes(q)) return true;
+        if (item.aliases && item.aliases.some(a => a.toLowerCase().includes(q))) return true;
+        return false;
+      });
+
+      const card = document.getElementById('resultCard');
+      if (found) {
+        document.getElementById('empName').innerText = found.name;
+        document.getElementById('empId').innerText = found.id;
+        document.getElementById('empStatus').innerText = found.status;
+        document.getElementById('empLeaves').innerText = found.leaves;
+        document.getElementById('empNextOff').innerText = found.nextoff;
+        card.style.display = 'block';
+      } else {
+        alert("Record not found for: " + q);
+        card.style.display = 'none';
+      }
+    }
+
+    let recognition;
+    function toggleMic() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Please use Google Chrome for microphone support.");
+        return;
+      }
+
+      if (!recognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.lang = 'en-US';
+
+        recognition.onstart = function() {
+          document.getElementById('micBtn').classList.add('listening');
+          document.getElementById('micBtn').innerText = "🎙️ Listening...";
+        };
+
+        recognition.onresult = function(event) {
+          const transcript = event.results[0][0].transcript;
+          document.getElementById('queryInput').value = transcript;
+          searchStaff(transcript);
+        };
+
+        recognition.onend = function() {
+          document.getElementById('micBtn').classList.remove('listening');
+          document.getElementById('micBtn').innerText = "🎤 Mic";
+        };
+
+        recognition.onerror = function(e) {
+          console.error(e);
+          document.getElementById('micBtn').classList.remove('listening');
+          document.getElementById('micBtn').innerText = "🎤 Mic";
+        };
+      }
+
+      recognition.start();
+    }
+  </script>
+</body>
+</html>
