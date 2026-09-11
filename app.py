@@ -472,14 +472,18 @@ components.html(
 
             const isSecureCtx = window.isSecureContext === true;
             const speechSupported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+            const isFirefox = /firefox/i.test(navigator.userAgent);
 
             if (!speechSupported) {{
                 // Web Speech "SpeechRecognition" is a Chromium/Safari feature —
                 // Firefox does not implement it at all, regardless of mic
                 // permissions. This is a browser-support issue, not a mic
                 // hardware/permission issue.
-                if (statusLabel) statusLabel.innerText = 'USE CHROME/EDGE';
-                if (bottomPill) bottomPill.innerText = '⌨️ Type below instead';
+                const msg = isFirefox ? 'FIREFOX HAS NO VOICE SUPPORT — OPEN IN CHROME' : 'USE CHROME/EDGE';
+                if (statusLabel) statusLabel.innerText = msg;
+                if (bottomPill) bottomPill.innerText = isFirefox
+                    ? '🦊 Firefox can\\'t do voice — open this link in Chrome'
+                    : '⌨️ Type below instead';
             }} else if (!isSecureCtx) {{
                 // Even in a supported browser, SpeechRecognition/getUserMedia
                 // require a secure context (https:// or localhost).
