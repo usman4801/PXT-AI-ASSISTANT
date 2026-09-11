@@ -295,23 +295,12 @@ st.markdown(
         }
         .hologram-stage.listening .face-core { animation-duration: 0.9s; }
 
-        .face-svg { width: 72px; height: 72px; overflow: visible; }
-        .face-eye {
-            fill: #e0f7ff;
-            filter: drop-shadow(0 0 4px #7dd3fc);
-            transform-origin: center;
-            animation: eyeBlink 4.5s infinite;
-        }
-        @keyframes eyeBlink {
-            0%, 92%, 100% { transform: scaleY(1); }
-            96% { transform: scaleY(0.12); }
-        }
-        .face-mouth {
-            fill: none;
-            stroke: #7dd3fc;
-            stroke-width: 2.5;
-            stroke-linecap: round;
-            filter: drop-shadow(0 0 4px #38bdf8);
+        .face-core-inner {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 40% 35%, rgba(255, 255, 255, 0.95), rgba(224, 247, 255, 0.15) 70%, transparent 100%);
+            filter: drop-shadow(0 0 10px #7dd3fc);
         }
 
         /* ---------- Bottom Instruction Pill ---------- */
@@ -424,11 +413,7 @@ st.markdown(
             <div class="face-ring ring-outer"></div>
             <div class="face-ring ring-mid"></div>
             <div class="face-core">
-                <svg viewBox="0 0 100 100" class="face-svg">
-                    <circle class="face-eye eye-l" cx="35" cy="42" r="4.2"></circle>
-                    <circle class="face-eye eye-r" cx="65" cy="42" r="4.2"></circle>
-                    <path class="face-mouth" d="M30 62 Q50 74 70 62"></path>
-                </svg>
+                <div class="face-core-inner"></div>
             </div>
         </div>
         <div class="wave-col wave-right">
@@ -485,6 +470,23 @@ components.html(
             const BADGE_PILL_TEXT = '🎙️ SPEAK YOUR BADGE NUMBER (e.g. EMP011)';
             const QUESTION_PILL_TEXT = '🎙️ ASK: "LEAVES LEFT" OR "NEXT OFF"';
 
+            const isSecureCtx = window.isSecureContext === true;
+            const speechSupported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+            if (!speechSupported) {{
+                // Web Speech "SpeechRecognition" is a Chromium/Safari feature —
+                // Firefox does not implement it at all, regardless of mic
+                // permissions. This is a browser-support issue, not a mic
+                // hardware/permission issue.
+                if (statusLabel) statusLabel.innerText = 'USE CHROME OR EDGE FOR VOICE';
+                if (bottomPill) bottomPill.innerText = '⌨️ VOICE NEEDS CHROME/EDGE — TYPE BELOW INSTEAD';
+            }} else if (!isSecureCtx) {{
+                // Even in a supported browser, SpeechRecognition/getUserMedia
+                // require a secure context (https:// or localhost).
+                if (statusLabel) statusLabel.innerText = 'PAGE NOT SERVED OVER HTTPS';
+                if (bottomPill) bottomPill.innerText = '🔒 NEEDS HTTPS FOR MIC ACCESS — TYPE BELOW INSTEAD';
+            }}
+
             function setListeningVisuals(listening) {{
                 if (!dot || !statusLabel || !bottomPill || !hologramStage) return;
                 if (listening) {{
@@ -537,8 +539,9 @@ components.html(
             }}
 
             function startRecognitionEngine() {{
-                if (!SpeechRecognition) {{
-                    if (statusLabel) statusLabel.innerText = 'MIC NOT SUPPORTED';
+                if (!speechSupported || !isSecureCtx) {{
+                    // Message already set above; nothing more to do — this
+                    // browser/context genuinely cannot run SpeechRecognition.
                     return;
                 }}
                 if (recognition) return;
