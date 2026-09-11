@@ -1,5 +1,5 @@
 """
-PXT HUB - Clean Cyber Kiosk with Real-Time Web Speech Recognition & Banner Switcher
+PXT HUB - Clean Cyber Kiosk with Real-Time Continuous Speech Recognition & Wake Word
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import streamlit.components.v1 as components
 # ============================================================
 APP_TITLE = "PXT HUB"
 DATA_FILE = "staff_data.csv"
-RESET_DELAY = 15
+RESET_DELAY = 25
 
 BANNER_1_URL = "https://raw.githubusercontent.com/usman4801/PXT-AI-ASSISTANT/main/banner.mp4"
 BANNER_2_URL = "https://raw.githubusercontent.com/usman4801/PXT-AI-ASSISTANT/main/banner2.mp4"
@@ -42,7 +42,7 @@ if "switch_banner" in st.query_params:
 
 # Receive voice input from JavaScript bridge
 if "voice_payload" in st.query_params:
-    spoken_val = st.query_params["voice_payload"]
+    spoken_val = st.query_params["voice_payload"].strip()
     del st.query_params["voice_payload"]
     st.session_state["last_heard"] = spoken_val
     st.session_state["last_interaction"] = time.time()
@@ -232,11 +232,10 @@ st.markdown(
 current_state = st.session_state.get("kiosk_state", "idle")
 current_emp = st.session_state.get("current_employee")
 
-# TTS Audio generation via browser SpeechSynthesis
 speak_text = ""
 if current_state == "asked_badge" and not st.session_state.get("last_interaction"):
-    speak_text = "Hello! Please say or type your Badge Number."
-elif current_state == "employee_active" and current_emp is not None and not st.session_state.get("answered"):
+    speak_text = "Hello! Please tell me your Badge Number."
+elif current_state == "employee_active" and current_emp is not None and not st.session_state.get("last_heard"):
     speak_text = f"Welcome {current_emp['Name']}. How can I assist you today?"
 
 components.html(
@@ -247,174 +246,225 @@ components.html(
         
         .top-hud {{
             position: fixed;
-            top: 14px;
+            top: 15px;
             left: 20px;
             display: flex;
             align-items: center;
             gap: 10px;
-            z-index: 9999;
+            z-index: 999999;
+            background: rgba(10, 15, 30, 0.65);
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            backdrop-filter: blur(8px);
         }}
         .dot {{
-            width: 10px;
-            height: 10px;
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
-            background: #38bdf8;
-            box-shadow: 0 0 10px #38bdf8;
+            background: #f59e0b;
+            box-shadow: 0 0 8px #f59e0b;
+            transition: all 0.3s ease;
         }}
         .dot.listening {{
-            background: #22c55e;
-            box-shadow: 0 0 12px #22c55e, 0 0 20px #22c55e;
+            background: #00e5ff !important;
+            box-shadow: 0 0 12px #00e5ff, 0 0 20px #00e5ff !important;
             animation: pulse 1s infinite alternate;
         }}
         @keyframes pulse {{
-            from {{ transform: scale(1); opacity: 0.8; }}
-            to {{ transform: scale(1.4); opacity: 1; }}
+            from {{ transform: scale(0.9); opacity: 0.8; }}
+            to {{ transform: scale(1.3); opacity: 1; }}
         }}
         .status-txt {{
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 700;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.08em;
             color: #94a3b8;
             text-transform: uppercase;
         }}
         .status-txt.listening {{
-            color: #4ade80;
+            color: #00e5ff !important;
         }}
         .live-capsule {{
             position: fixed;
-            top: 12px;
+            top: 15px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(15, 23, 42, 0.85);
             border: 1px solid rgba(56, 189, 248, 0.4);
             border-radius: 30px;
-            padding: 4px 14px;
+            padding: 5px 16px;
             color: #38bdf8;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 600;
-            max-width: 60%;
+            max-width: 65%;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             backdrop-filter: blur(10px);
             display: none;
+            z-index: 999999;
         }}
-        .throat-btn-container {{
+        .mic-instruction {{
             position: fixed;
             top: 32vh;
             left: 50%;
             transform: translateX(-50%);
             text-align: center;
             z-index: 9999;
-        }}
-        .throat-btn {{
-            background: rgba(15, 23, 42, 0.7);
-            border: 1.5px solid rgba(56, 189, 248, 0.6);
-            color: #e2e8f0;
-            padding: 8px 18px;
-            border-radius: 30px;
+            color: rgba(255, 255, 255, 0.7);
             font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 0.08em;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 8px 18px;
+            border-radius: 20px;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            backdrop-filter: blur(6px);
             cursor: pointer;
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
-            transition: all 0.2s ease;
-            backdrop-filter: blur(8px);
-        }}
-        .throat-btn:hover {{
-            background: rgba(56, 189, 248, 0.25);
-            box-shadow: 0 0 25px rgba(56, 189, 248, 0.6);
         }}
     </style>
 
     <div class="top-hud">
         <div id="micDot" class="dot"></div>
-        <div id="statusLabel" class="status-txt">READY</div>
+        <div id="statusLabel" class="status-txt">STANDBY (SAY "HI PXT")</div>
     </div>
 
     <div id="liveHeard" class="live-capsule"></div>
-
-    <div class="throat-btn-container">
-        <button id="wakeBtn" class="throat-btn" onclick="startMic()">🎙️ SAY "HI PXT" / TAP TO TALK</button>
-    </div>
+    <div id="micPrompt" class="mic-instruction" onclick="activateMicDirectly()">🎙️ TAP OR SAY "HI PXT" TO WAKE</div>
 
     <script>
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
+        let isSpeakingOrProcessing = false;
+        const currentKioskState = "{current_state}";
 
-        // Auto TTS if pending message
+        const dot = document.getElementById('micDot');
+        const statusLabel = document.getElementById('statusLabel');
+        const liveCapsule = document.getElementById('liveHeard');
+        const promptBtn = document.getElementById('micPrompt');
+
+        // Dynamic status display based on kiosk state
+        if (currentKioskState !== "idle") {{
+            dot.className = "dot listening";
+            statusLabel.className = "status-txt listening";
+            statusLabel.innerText = "LISTENING...";
+            promptBtn.innerText = currentKioskState === "asked_badge" 
+                ? "🎙️ SPEAK YOUR BADGE NUMBER (e.g. EMP011)" 
+                : "🎙️ ASK: 'LEAVES LEFT' OR 'NEXT OFF'";
+        }}
+
+        // Text-To-Speech if message available
         const textToSay = "{speak_text}";
         if (textToSay && 'speechSynthesis' in window) {{
+            isSpeakingOrProcessing = true;
             const utterance = new SpeechSynthesisUtterance(textToSay);
-            utterance.rate = 1.0;
+            utterance.rate = 0.95;
+            utterance.onend = () => {{
+                isSpeakingOrProcessing = false;
+                startRecognitionEngine();
+            }};
             window.speechSynthesis.speak(utterance);
         }}
 
-        if (SpeechRecognition) {{
+        function setListeningVisuals(listening) {{
+            if (listening) {{
+                dot.className = 'dot listening';
+                statusLabel.className = 'status-txt listening';
+                statusLabel.innerText = 'LISTENING...';
+            }} else {{
+                if (currentKioskState === "idle") {{
+                    dot.className = 'dot';
+                    statusLabel.className = 'status-txt';
+                    statusLabel.innerText = 'STANDBY (SAY "HI PXT")';
+                }}
+            }}
+        }}
+
+        function startRecognitionEngine() {{
+            if (!SpeechRecognition) {{
+                statusLabel.innerText = 'MIC NOT SUPPORTED';
+                return;
+            }}
+            if (recognition) return;
+
             recognition = new SpeechRecognition();
-            recognition.continuous = false;
+            recognition.continuous = true;
             recognition.interimResults = true;
             recognition.lang = 'en-US';
 
             recognition.onstart = function() {{
-                document.getElementById('micDot').className = 'dot listening';
-                const lbl = document.getElementById('statusLabel');
-                lbl.className = 'status-txt listening';
-                lbl.innerText = 'LISTENING...';
+                if (currentKioskState !== "idle") {{
+                    setListeningVisuals(true);
+                }}
             }};
 
             recognition.onresult = function(event) {{
-                let transcript = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {{
-                    transcript += event.results[i][0].transcript;
-                }}
-                const pill = document.getElementById('liveHeard');
-                pill.style.display = 'block';
-                pill.innerText = 'Heard: ' + transcript;
+                if (isSpeakingOrProcessing) return;
 
-                if (event.results[0].isFinal) {{
-                    window.parent.location.search = '?voice_payload=' + encodeURIComponent(transcript);
+                let interim = '';
+                let finalPhrase = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {{
+                    const text = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {{
+                        finalPhrase += text;
+                    }} else {{
+                        interim += text;
+                    }}
+                }}
+
+                const heardText = (finalPhrase || interim).trim();
+                const lowerText = heardText.toLowerCase();
+
+                if (heardText.length > 0) {{
+                    setListeningVisuals(true);
+                    liveCapsule.style.display = 'block';
+                    liveCapsule.innerText = 'Heard: ' + heardText;
+                }}
+
+                // Idle wake-word detection
+                if (currentKioskState === "idle") {{
+                    if (lowerText.includes("pxt") || lowerText.includes("hi pxt") || lowerText.includes("hey") || lowerText.includes("hello")) {{
+                        isSpeakingOrProcessing = true;
+                        window.parent.location.search = '?voice_payload=' + encodeURIComponent('WAKE');
+                    }}
+                }} else if (finalPhrase.trim().length > 0) {{
+                    isSpeakingOrProcessing = true;
+                    window.parent.location.search = '?voice_payload=' + encodeURIComponent(finalPhrase.trim());
                 }}
             }};
 
-            recognition.onerror = function(event) {{
-                document.getElementById('micDot').className = 'dot';
-                const lbl = document.getElementById('statusLabel');
-                lbl.className = 'status-txt';
-                lbl.innerText = 'READY';
+            recognition.onerror = function(e) {{
+                console.log("Mic error / pause: ", e.error);
             }};
 
             recognition.onend = function() {{
-                document.getElementById('micDot').className = 'dot';
-                const lbl = document.getElementById('statusLabel');
-                lbl.className = 'status-txt';
-                lbl.innerText = 'READY';
+                // Auto-restart to maintain continuous listening
+                recognition = null;
+                if (!isSpeakingOrProcessing) {{
+                    setTimeout(startRecognitionEngine, 250);
+                }}
             }};
+
+            try {{
+                recognition.start();
+            }} catch(e) {{}}
         }}
 
-        function startMic() {{
-            if (recognition) {{
-                try {{
-                    recognition.start();
-                }} catch(e) {{
-                    recognition.stop();
-                }}
+        function activateMicDirectly() {{
+            if (currentKioskState === "idle") {{
+                window.parent.location.search = '?voice_payload=' + encodeURIComponent('WAKE');
             }} else {{
-                alert("Speech recognition is not supported in this browser. Please use Google Chrome or Edge.");
+                startRecognitionEngine();
             }}
         }}
 
-        // If state is not idle, adjust prompt
-        const kioskState = "{current_state}";
-        const wakeBtn = document.getElementById('wakeBtn');
-        if (kioskState === "asked_badge") {{
-            wakeBtn.innerText = "🎙️ SPEAK YOUR BADGE NUMBER";
-        }} else if (kioskState === "employee_active") {{
-            wakeBtn.innerText = "🎙️ ASK QUESTION (LEAVES / OFF)";
-        }}
+        // Initialize listener
+        startRecognitionEngine();
     </script>
     """,
-    height=200,
+    height=80,
 )
 
 # ============================================================
@@ -427,7 +477,7 @@ if current_state == "asked_badge":
     badge_in = st.text_input("badge_in", placeholder="Type Badge No (e.g. EMP011) or Speak above", label_visibility="collapsed")
     active_input = st.session_state.get("last_heard") or badge_in
 
-    if active_input:
+    if active_input and active_input != "WAKE":
         q = active_input.strip().lower().replace(" ", "")
         match = staff_df[staff_df["EmployeeID"].str.lower().str.replace(" ", "") == q]
         if match.empty:
@@ -474,17 +524,19 @@ elif current_state == "employee_active":
     q_box = st.text_input("ask_q", placeholder="Type: 'leaves left' or 'next off' or Speak above", label_visibility="collapsed")
     active_q = st.session_state.get("last_heard") or q_box
 
-    if active_q:
+    if active_q and active_q != "WAKE":
         st.session_state["last_interaction"] = time.time()
         ans = answer_employee_question(emp, active_q)
         st.session_state["last_heard"] = ""
         st.success(ans)
+        
         # Voice speak answer
         components.html(
             f"""
             <script>
                 if ('speechSynthesis' in window) {{
                     const u = new SpeechSynthesisUtterance("{ans}");
+                    u.rate = 0.95;
                     window.speechSynthesis.speak(u);
                 }}
             </script>
