@@ -587,11 +587,15 @@ components.html(
                     }}
 
                     if (currentKioskState === 'idle') {{
-                        // Tight wake-word match: "pxt", "hi pxt", "hey pxt" as
-                        // whole words only — avoids false-triggering on any
-                        // stray "hey"/"hello" picked up from ambient talk.
-                        const wakePattern = /\\b(hi\\s*pxt|hey\\s*pxt|pxt)\\b/;
-                        if (wakePattern.test(lowerText)) {{
+                        // "PXT" isn't a dictionary word, so Chrome's speech
+                        // engine often mishears the final consonant (T -> D)
+                        // or drops spaces, transcribing things like "pxd",
+                        // "pxt", "hi pxt" as one run-together word. Strip
+                        // spaces/punctuation and match the phonetic shape
+                        // px[t/d] rather than the exact spelling "pxt".
+                        const normalized = lowerText.replace(/[^a-z]/g, '');
+                        const wakeMatch = /px[td]/.test(normalized);
+                        if (wakeMatch) {{
                             hasTriggeredThisLoad = true;
                             isSpeakingOrProcessing = true;
                             window.parent.location.search = '?voice_payload=' + encodeURIComponent('WAKE');
