@@ -41,6 +41,20 @@ if "switch_banner" in st.query_params:
     del st.query_params["switch_banner"]
     st.rerun()
 
+# Receive voice input directly from query parameters
+if "voice_payload" in st.query_params:
+    spoken_val = str(st.query_params["voice_payload"]).strip()
+    del st.query_params["voice_payload"]
+    st.session_state["last_interaction"] = time.time()
+
+    current_state = st.session_state.get("kiosk_state", "idle")
+    if current_state == "idle":
+        st.session_state["kiosk_state"] = "asked_badge"
+        st.session_state["last_heard"] = ""
+    else:
+        st.session_state["last_heard"] = spoken_val
+    st.rerun()
+
 active_video = BANNER_1_URL if st.session_state.active_banner == 1 else BANNER_2_URL
 
 # ============================================================
@@ -285,7 +299,7 @@ st.markdown(
             filter: drop-shadow(0 0 10px #7dd3fc);
         }
 
-        /* Bottom Pill */
+        /* Bottom Pill Anchor for direct interaction */
         .bottom-pill {
             position: fixed;
             bottom: 5vh;
@@ -309,7 +323,14 @@ st.markdown(
             backdrop-filter: blur(10px);
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
             cursor: pointer;
+            text-decoration: none !important;
+            display: inline-block;
             transition: all 0.3s ease;
+        }
+        .bottom-pill:hover {
+            color: #ffffff;
+            border-color: #38bdf8;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
         }
         .bottom-pill.listening {
             color: #00e5ff;
@@ -352,15 +373,6 @@ st.markdown(
         .status-present { color: #34d399; }
         .status-leave { color: #fb923c; }
 
-        /* Hide the internal bridge input */
-        .hidden-bridge-box {
-            position: absolute !important;
-            opacity: 0 !important;
-            pointer-events: none !important;
-            height: 0 !important;
-            width: 0 !important;
-        }
-
         div[data-testid="stTextInput"] input {
             background: rgba(15, 23, 42, 0.9) !important;
             border: 1.5px solid rgba(56, 189, 248, 0.45) !important;
@@ -373,6 +385,13 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+current_state = st.session_state.get("kiosk_state", "idle")
+current_emp = st.session_state.get("current_employee")
+
+# Dynamic pill link for instant fallback click
+pill_href = "?voice_payload=WAKE" if current_state == "idle" else "#"
+pill_label = '🎙️ Say "Hi PXT" or Click here' if current_state == "idle" else '🎙️ Speak or Type below'
 
 # Render Background & Static UI Elements
 st.markdown(
@@ -411,7 +430,7 @@ st.markdown(
         </div>
     </div>
 
-    <div id="bottomPill" class="bottom-pill">🎙️ Say "Hi PXT" or Click here</div>
+    <a id="bottomPill" href="{pill_href}" target="_self" class="bottom-pill">{pill_label}</a>
     """,
     unsafe_allow_html=True,
 )
@@ -419,9 +438,6 @@ st.markdown(
 # ============================================================
 # SPEECH SYNTHESIS & ROBUST MIC ENGINE (JS BRIDGE)
 # ============================================================
-current_state = st.session_state.get("kiosk_state", "idle")
-current_emp = st.session_state.get("current_employee")
-
 speak_text = ""
 if current_state == "asked_badge" and not st.session_state.get("last_heard"):
     speak_text = "Please say or type your badge number."
@@ -431,7 +447,6 @@ elif current_state == "employee_active" and current_emp is not None and not st.s
 js_state_json = json.dumps(current_state)
 js_speak_json = json.dumps(speak_text)
 
-# Seamless event-driven JavaScript bridge
 js_code = """
 <script>
 (function() {
@@ -476,26 +491,16 @@ js_code = """
                 statusLabel.innerText = 'STANDBY';
                 hologramStage.classList.remove('listening');
                 bottomPill.classList.remove('listening');
-                if (currentKioskState === 'idle') {
-                    bottomPill.innerText = '🎙️ Say "Hi PXT" or Click here';
-                } else if (currentKioskState === 'asked_badge') {
-                    bottomPill.innerText = '🎙️ Speak Badge Number (e.g. EMP011)';
-                } else {
-                    bottomPill.innerText = '🎙️ Ask: "Leaves" or "Next off"';
-                }
             }
         }
 
-        // Send text to Streamlit without reloading the page
-        function sendToStreamlit(val) {
+        function triggerServer(val) {
             if (isSpeaking) return;
-            const inputField = pdoc.querySelector('input[aria-label="hidden_voice_receiver"]');
-            if (inputField) {
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                nativeInputValueSetter.call(inputField, val);
-                inputField.dispatchEvent(new Event('input', { bubbles: true }));
-                inputField.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', code: 'Enter', keyCode: 13 }));
-            }
+            try { recognition.stop(); } catch(e) {}
+            // Send payload directly via top window location
+            const targetUrl = new URL(window.parent.location.href);
+            targetUrl.searchParams.set('voice_payload', val);
+            window.parent.location.href = targetUrl.href;
         }
 
         recognition.onstart = function() {
@@ -534,10 +539,10 @@ js_code = """
                     normalized.includes('hub');
 
                 if (isWakeTrigger) {
-                    sendToStreamlit('WAKE');
+                    triggerServer('WAKE');
                 }
             } else if (isFinal && liveText.length > 0) {
-                sendToStreamlit(liveText);
+                triggerServer(liveText);
             }
         };
 
@@ -561,16 +566,6 @@ js_code = """
                     recognition.start();
                 } catch(e) {}
             }
-        }
-
-        if (bottomPill) {
-            bottomPill.onclick = function() {
-                if (currentKioskState === 'idle') {
-                    sendToStreamlit('WAKE');
-                } else {
-                    safeStart();
-                }
-            };
         }
 
         if (textToSay && 'speechSynthesis' in window) {
@@ -599,24 +594,6 @@ js_code = """
 """.replace("%CURRENT_STATE%", js_state_json).replace("%SPEAK_TEXT%", js_speak_json)
 
 components.html(js_code, height=0)
-
-# Hidden Direct Bridge Receiver Input
-st.markdown('<div class="hidden-bridge-box">', unsafe_allow_html=True)
-bridge_val = st.text_input("hidden_voice_receiver", key="hidden_voice_receiver", label_visibility="collapsed")
-st.markdown('</div>', unsafe_allow_html=True)
-
-if bridge_val:
-    val = bridge_val.strip()
-    st.session_state["hidden_voice_receiver"] = ""
-    st.session_state["last_interaction"] = time.time()
-    
-    if current_state == "idle" and ("WAKE" in val or "wake" in val.lower()):
-        st.session_state["kiosk_state"] = "asked_badge"
-        st.session_state["last_heard"] = ""
-        st.rerun()
-    elif current_state != "idle":
-        st.session_state["last_heard"] = val
-        st.rerun()
 
 # ============================================================
 # BOTTOM DECK (CARDS & INPUTS)
