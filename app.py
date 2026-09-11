@@ -299,43 +299,43 @@ st.markdown(
             filter: drop-shadow(0 0 10px #7dd3fc);
         }
 
-        /* Bottom Pill Anchor for direct interaction */
-        .bottom-pill {
+        /* Bottom Action Button */
+        .bottom-pill-btn {
             position: fixed;
             bottom: 5vh;
             left: 50%;
             transform: translateX(-50%);
             z-index: 999999;
-            background: rgba(15, 23, 42, 0.85);
-            border: 1px solid rgba(56, 189, 248, 0.45);
+            background: rgba(15, 23, 42, 0.92);
+            border: 1.5px solid rgba(56, 189, 248, 0.6);
             border-radius: 30px;
-            padding: 12px 26px;
+            padding: 13px 30px;
             color: #38bdf8;
             font-family: 'Inter', sans-serif;
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 700;
-            letter-spacing: 0.03em;
-            max-width: 82%;
+            letter-spacing: 0.04em;
+            max-width: 85%;
             text-align: center;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
             cursor: pointer;
-            text-decoration: none !important;
-            display: inline-block;
-            transition: all 0.3s ease;
+            outline: none;
+            transition: all 0.25s ease;
         }
-        .bottom-pill:hover {
+        .bottom-pill-btn:hover {
             color: #ffffff;
-            border-color: #38bdf8;
-            box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+            border-color: #00e5ff;
+            box-shadow: 0 0 24px rgba(0, 229, 255, 0.55);
+            transform: translateX(-50%) scale(1.02);
         }
-        .bottom-pill.listening {
+        .bottom-pill-btn.listening {
             color: #00e5ff;
-            border-color: rgba(0, 229, 255, 0.6);
-            box-shadow: 0 0 20px rgba(0, 229, 255, 0.35), 0 8px 24px rgba(0, 0, 0, 0.5);
+            border-color: rgba(0, 229, 255, 0.8);
+            box-shadow: 0 0 22px rgba(0, 229, 255, 0.45);
         }
 
         /* Glass Deck */
@@ -389,10 +389,6 @@ st.markdown(
 current_state = st.session_state.get("kiosk_state", "idle")
 current_emp = st.session_state.get("current_employee")
 
-# Dynamic pill link for instant fallback click
-pill_href = "?voice_payload=WAKE" if current_state == "idle" else "#"
-pill_label = '🎙️ Say "Hi PXT" or Click here' if current_state == "idle" else '🎙️ Speak or Type below'
-
 # Render Background & Static UI Elements
 st.markdown(
     f"""
@@ -430,7 +426,9 @@ st.markdown(
         </div>
     </div>
 
-    <a id="bottomPill" href="{pill_href}" target="_self" class="bottom-pill">{pill_label}</a>
+    <button id="bottomPill" class="bottom-pill-btn" onclick="window.location.href = window.location.pathname + '?voice_payload=WAKE';">
+        🎙️ Say "Hi PXT" or Click here
+    </button>
     """,
     unsafe_allow_html=True,
 )
@@ -471,7 +469,7 @@ js_code = """
         let recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = 'en-US';
+        recognition.lang = navigator.language || 'en-US';
 
         let isSpeaking = false;
         let isRecognizing = false;
@@ -497,11 +495,15 @@ js_code = """
         function triggerServer(val) {
             if (isSpeaking) return;
             try { recognition.stop(); } catch(e) {}
-            // Send payload directly via top window location
-            const targetUrl = new URL(window.parent.location.href);
-            targetUrl.searchParams.set('voice_payload', val);
-            window.parent.location.href = targetUrl.href;
+            window.parent.location.href = window.parent.location.pathname + '?voice_payload=' + encodeURIComponent(val);
         }
+
+        // Live Audio Detect Indicator
+        recognition.onsoundstart = function() {
+            if (bottomPill && currentKioskState === 'idle') {
+                bottomPill.innerText = "🔊 Audio Detected... Sun raha hoon!";
+            }
+        };
 
         recognition.onstart = function() {
             isRecognizing = true;
@@ -549,14 +551,16 @@ js_code = """
         recognition.onerror = function(event) {
             if (event.error === 'not-allowed') {
                 if (statusLabel) statusLabel.innerText = 'MIC BLOCKED';
-                if (bottomPill) bottomPill.innerText = '🔒 Click to Allow Mic';
+                if (bottomPill) bottomPill.innerText = '🔒 Please Allow Microphone in Browser';
+            } else if (event.error === 'network') {
+                if (bottomPill) bottomPill.innerText = '⚠️ Speech Network Offline - Click to use';
             }
         };
 
         recognition.onend = function() {
             isRecognizing = false;
             if (!isSpeaking) {
-                setTimeout(safeStart, 100);
+                setTimeout(safeStart, 150);
             }
         };
 
