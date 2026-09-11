@@ -131,8 +131,8 @@ st.markdown(
             width: 100vw;
             height: 100vh;
             object-fit: cover;
-            z-index: 1;
-            pointer-events: none;
+            z-index: 0 !important;
+            pointer-events: none !important;
         }
 
         .hud-title-wrap {
@@ -223,7 +223,7 @@ st.markdown(
             justify-content: center;
             gap: 48px;
             z-index: 5;
-            pointer-events: none;
+            pointer-events: none !important;
         }
         .wave-col {
             display: flex;
@@ -299,22 +299,17 @@ st.markdown(
             filter: drop-shadow(0 0 10px #7dd3fc);
         }
 
-        /* Native Streamlit Button Styled as Cyber Pill */
-        .bottom-pill-wrap {
-            position: fixed;
-            bottom: 5vh;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 999999;
-            width: auto;
-            text-align: center;
-        }
-
-        .bottom-pill-wrap div[data-testid="stButton"] button {
+        /* Direct Interactive Cyber Action Button */
+        #actionPill {
+            position: fixed !important;
+            bottom: 5vh !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            z-index: 999999999 !important;
             background: rgba(15, 23, 42, 0.92) !important;
             border: 1.5px solid rgba(56, 189, 248, 0.6) !important;
             border-radius: 30px !important;
-            padding: 12px 30px !important;
+            padding: 13px 32px !important;
             color: #38bdf8 !important;
             font-family: 'Inter', sans-serif !important;
             font-size: 15px !important;
@@ -323,29 +318,37 @@ st.markdown(
             backdrop-filter: blur(12px) !important;
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
             cursor: pointer !important;
+            user-select: none !important;
             transition: all 0.25s ease !important;
+            display: inline-block !important;
         }
 
-        .bottom-pill-wrap div[data-testid="stButton"] button:hover {
+        #actionPill:hover {
             color: #ffffff !important;
             border-color: #00e5ff !important;
             box-shadow: 0 0 24px rgba(0, 229, 255, 0.55) !important;
-            transform: scale(1.03) !important;
+            transform: translateX(-50%) scale(1.03) !important;
+        }
+
+        #actionPill.listening {
+            color: #00e5ff !important;
+            border-color: rgba(0, 229, 255, 0.8) !important;
+            box-shadow: 0 0 22px rgba(0, 229, 255, 0.45) !important;
         }
 
         /* Glass Deck */
         .kiosk-ui-container {
-            position: fixed;
-            bottom: 14vh;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 200;
-            width: 90%;
-            max-width: 480px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
+            position: fixed !important;
+            bottom: 14vh !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            z-index: 9999999 !important;
+            width: 90% !important;
+            max-width: 480px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 12px !important;
         }
 
         .employee-glass-card {
@@ -384,7 +387,9 @@ st.markdown(
 current_state = st.session_state.get("kiosk_state", "idle")
 current_emp = st.session_state.get("current_employee")
 
-# Render Background & Static UI Elements
+pill_initial_text = '🎙️ Say "Hi PXT" or Click here' if current_state == "idle" else '🎙️ Speak or Type below'
+
+# Render Background, Hologram & Permanent Action Pill
 st.markdown(
     f"""
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
@@ -420,23 +425,14 @@ st.markdown(
             <span></span><span></span><span></span><span></span>
         </div>
     </div>
+
+    <div id="actionPill">{pill_initial_text}</div>
     """,
     unsafe_allow_html=True,
 )
 
-# Render Native Bottom Action Button
-st.markdown('<div class="bottom-pill-wrap">', unsafe_allow_html=True)
-pill_title = '🎙️ Say "Hi PXT" or Click here' if current_state == "idle" else '🎙️ Speak or Type below'
-if st.button(pill_title, key="main_pill_btn"):
-    if current_state == "idle":
-        st.session_state["kiosk_state"] = "asked_badge"
-        st.session_state["last_heard"] = ""
-        st.session_state["last_interaction"] = time.time()
-        st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
 # ============================================================
-# SPEECH SYNTHESIS & ROBUST MIC ENGINE (JS BRIDGE)
+# SPEECH SYNTHESIS & ACTIVE MIC ENGINE (JS BRIDGE)
 # ============================================================
 speak_text = ""
 if current_state == "asked_badge" and not st.session_state.get("last_heard"):
@@ -455,14 +451,32 @@ js_code = """
         const dot = pdoc.getElementById('micDot');
         const statusLabel = pdoc.getElementById('statusLabel');
         const hologramStage = pdoc.getElementById('hologramStage');
+        const actionPill = pdoc.getElementById('actionPill');
 
         const currentKioskState = %CURRENT_STATE%;
         const textToSay = %SPEAK_TEXT%;
 
+        function sendPayload(val) {
+            const url = new URL(window.parent.location.href);
+            url.searchParams.set('voice_payload', val);
+            window.parent.location.href = url.href;
+        }
+
+        // Direct click event binding on the pill
+        if (actionPill) {
+            actionPill.onclick = function() {
+                if (currentKioskState === 'idle') {
+                    sendPayload('WAKE');
+                } else {
+                    safeStart();
+                }
+            };
+        }
+
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        
         if (!SpeechRecognition) {
             if (statusLabel) statusLabel.innerText = "CHROME NEEDED";
+            if (actionPill) actionPill.innerText = "⚠️ Voice requires Google Chrome";
             return;
         }
 
@@ -474,25 +488,29 @@ js_code = """
         let isSpeaking = false;
         let isRecognizing = false;
 
-        function updateUI(listening) {
+        function updateUI(listening, customText) {
             if (!dot || !statusLabel || !hologramStage) return;
             if (listening) {
                 dot.className = 'dot listening';
                 statusLabel.className = 'status-txt listening';
                 statusLabel.innerText = 'LISTENING...';
                 hologramStage.classList.add('listening');
+                if (actionPill) {
+                    actionPill.classList.add('listening');
+                    if (customText) actionPill.innerText = customText;
+                }
             } else {
                 dot.className = 'dot';
                 statusLabel.className = 'status-txt';
                 statusLabel.innerText = 'STANDBY';
                 hologramStage.classList.remove('listening');
+                if (actionPill) {
+                    actionPill.classList.remove('listening');
+                    if (currentKioskState === 'idle') {
+                        actionPill.innerText = '🎙️ Say "Hi PXT" or Click here';
+                    }
+                }
             }
-        }
-
-        function triggerServer(val) {
-            if (isSpeaking) return;
-            try { recognition.stop(); } catch(e) {}
-            window.parent.location.href = window.parent.location.pathname + '?voice_payload=' + encodeURIComponent(val);
         }
 
         recognition.onstart = function() {
@@ -514,29 +532,27 @@ js_code = """
             liveText = liveText.trim();
             const lower = liveText.toLowerCase();
 
-            if (currentKioskState === 'idle') {
-                const normalized = lower.replace(/[^a-z0-9]/g, '');
-                const isWakeTrigger = 
-                    normalized.includes('pxt') || 
-                    normalized.includes('pxd') || 
-                    normalized.includes('txt') || 
-                    normalized.includes('bxt') || 
-                    normalized.includes('ext') || 
-                    normalized.includes('hi') || 
-                    normalized.includes('hello') || 
-                    normalized.includes('hub');
+            if (liveText.length > 0) {
+                updateUI(true, 'Heard: "' + liveText + '"');
+            }
 
-                if (isWakeTrigger) {
-                    triggerServer('WAKE');
+            if (currentKioskState === 'idle') {
+                const clean = lower.replace(/[^a-z0-9]/g, '');
+                if (clean.includes('pxt') || clean.includes('pxd') || clean.includes('txt') || 
+                    clean.includes('bxt') || clean.includes('hi') || clean.includes('hello') || clean.includes('hub')) {
+                    try { recognition.stop(); } catch(e) {}
+                    sendPayload('WAKE');
                 }
             } else if (isFinal && liveText.length > 0) {
-                triggerServer(liveText);
+                try { recognition.stop(); } catch(e) {}
+                sendPayload(liveText);
             }
         };
 
         recognition.onerror = function(event) {
             if (event.error === 'not-allowed') {
                 if (statusLabel) statusLabel.innerText = 'MIC BLOCKED';
+                if (actionPill) actionPill.innerText = '🔒 Click to Allow Microphone';
             }
         };
 
@@ -580,7 +596,8 @@ js_code = """
 </script>
 """.replace("%CURRENT_STATE%", js_state_json).replace("%SPEAK_TEXT%", js_speak_json)
 
-components.html(js_code, height=0)
+# Kept at 1px height to guarantee browser doesn't freeze background mic recognition
+components.html(js_code, height=1)
 
 # ============================================================
 # BOTTOM DECK (CARDS & INPUTS)
