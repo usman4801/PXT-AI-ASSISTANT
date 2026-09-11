@@ -506,13 +506,18 @@ components.html(
             }}
 
             // Seed pill text / visuals for the current server-side state
-            if (currentKioskState !== 'idle' && bottomPill) {{
-                bottomPill.innerText = (currentKioskState === 'asked_badge') ? BADGE_PILL_TEXT : QUESTION_PILL_TEXT;
-            }}
-            if (currentKioskState !== 'idle') {{
-                setListeningVisuals(true);
-            }} else if (bottomPill) {{
-                bottomPill.innerText = DEFAULT_PILL_TEXT;
+            // (skip when the unsupported-browser/insecure-context message is
+            // already showing — don't clobber it with the default prompt)
+            const voiceUnavailable = (!speechSupported || !isSecureCtx);
+            if (!voiceUnavailable) {{
+                if (currentKioskState !== 'idle' && bottomPill) {{
+                    bottomPill.innerText = (currentKioskState === 'asked_badge') ? BADGE_PILL_TEXT : QUESTION_PILL_TEXT;
+                }}
+                if (currentKioskState !== 'idle') {{
+                    setListeningVisuals(true);
+                }} else if (bottomPill) {{
+                    bottomPill.innerText = DEFAULT_PILL_TEXT;
+                }}
             }}
 
             // Prime mic permission early where allowed (still requires a user
