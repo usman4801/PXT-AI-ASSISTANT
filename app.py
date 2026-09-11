@@ -1,5 +1,5 @@
 """
-PXT HUB - Clean Cyber Kiosk with Real-Time Continuous Speech Recognition & Wake Word
+PXT HUB - Clean Cyber Kiosk with Real-Time Audio Detection & Speech Recognition
 """
 
 from __future__ import annotations
@@ -79,9 +79,9 @@ def answer_employee_question(emp, question: str) -> str:
     if "leave" in q or "remaining" in q or "vacation" in q:
         return f"{name}, you have {emp['RemainingLeaves']} remaining leaves."
     elif "off" in q or "holiday" in q or "weekend" in q:
-        return f"{name}, your next off day is scheduled on {emp['NextOffDay']}."
+        return f"{name}, your next off day is on {emp['NextOffDay']}."
     elif "status" in q or "present" in q or "absent" in q:
-        return f"{name}, your current attendance status is {emp['Status']}."
+        return f"{name}, your current status is {emp['Status']}."
     return f"{name}, status: {emp['Status']}, leaves: {emp['RemainingLeaves']}, next off: {emp['NextOffDay']}."
 
 
@@ -299,7 +299,7 @@ st.markdown(
             filter: drop-shadow(0 0 10px #7dd3fc);
         }
 
-        /* Action Pill Button */
+        /* Direct Action Button */
         #actionPill {
             position: fixed !important;
             bottom: 5vh !important;
@@ -432,7 +432,7 @@ st.markdown(
 )
 
 # ============================================================
-# SPEECH SYNTHESIS & REAL-TIME AUDIO BRIDGE
+# REAL-TIME AUDIO ENERGY & SPEECH RECOGNITION BRIDGE
 # ============================================================
 speak_text = ""
 if current_state == "asked_badge" and not st.session_state.get("last_heard"):
@@ -456,37 +456,27 @@ js_code = """
         const currentKioskState = %CURRENT_STATE%;
         const textToSay = %SPEAK_TEXT%;
 
+        let isSpeaking = false;
+        let isTriggered = false;
+
         function sendPayload(val) {
+            if (isTriggered) return;
+            isTriggered = true;
             const url = new URL(window.parent.location.href);
             url.searchParams.set('voice_payload', val);
             window.parent.location.replace(url.href);
         }
 
-        // Direct click event binding on pill
+        // Direct Click Fallback
         if (actionPill) {
             actionPill.onclick = function() {
                 if (currentKioskState === 'idle') {
                     sendPayload('WAKE');
                 } else {
-                    safeStart();
+                    startAudioEngine();
                 }
             };
         }
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            if (statusLabel) statusLabel.innerText = "CHROME REQUIRED";
-            if (actionPill) actionPill.innerText = "⚠️ Voice requires Google Chrome";
-            return;
-        }
-
-        let recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-
-        let isSpeaking = false;
-        let isRecognizing = false;
 
         function updateUI(listening, customText) {
             if (!dot || !statusLabel || !hologramStage) return;
@@ -513,76 +503,106 @@ js_code = """
             }
         }
 
-        recognition.onstart = function() {
-            isRecognizing = true;
-            updateUI(true);
-        };
+        // Hardware Audio Stream Meter
+        function startAudioEnergyMeter() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                .then(stream => {
+                    updateUI(true, '🎙️ Say "Hi PXT" or Click here');
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const source = audioCtx.createMediaStreamSource(stream);
+                    const analyser = audioCtx.createAnalyser();
+                    analyser.fftSize = 256;
+                    source.connect(analyser);
 
-        // Live Audio Hardware Activity Indicators in pure English
-        recognition.onaudiostart = function() {
-            if (actionPill && currentKioskState === 'idle') {
-                actionPill.innerText = "⚡ Mic Active... Listening";
-            }
-        };
+                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    let silenceCounter = 0;
 
-        recognition.onsoundstart = function() {
-            if (actionPill && currentKioskState === 'idle') {
-                actionPill.innerText = "🔊 Audio Detected...";
-            }
-        };
+                    function checkAudio() {
+                        if (isSpeaking || isTriggered) {
+                            requestAnimationFrame(checkAudio);
+                            return;
+                        }
 
-        recognition.onresult = function(event) {
-            if (isSpeaking) return;
+                        analyser.getByteFrequencyData(dataArray);
+                        let sum = 0;
+                        for (let i = 0; i < dataArray.length; i++) {
+                            sum += dataArray[i];
+                        }
+                        let average = sum / dataArray.length;
 
-            let liveText = '';
-            for (let i = 0; i < event.results.length; ++i) {
-                liveText += event.results[i][0].transcript;
-            }
+                        // Voice Energy Threshold (triggers instantly upon speaking into mic)
+                        if (average > 25) {
+                            if (currentKioskState === 'idle') {
+                                if (actionPill) actionPill.innerText = "🔊 Voice Detected... Activating!";
+                                setTimeout(() => sendPayload('WAKE'), 300);
+                                return;
+                            }
+                        }
+                        requestAnimationFrame(checkAudio);
+                    }
+                    checkAudio();
+                })
+                .catch(err => {
+                    console.log('Microphone access denied:', err);
+                    if (statusLabel) statusLabel.innerText = 'MIC BLOCKED';
+                    if (actionPill) actionPill.innerText = '🔒 Please Allow Microphone in Browser';
+                });
+        }
 
-            liveText = liveText.trim();
-            const lower = liveText.toLowerCase();
+        // Speech Recognition for Badge Input and Questions
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
 
-            if (liveText.length > 0) {
-                updateUI(true, 'Heard: "' + liveText + '"');
-            }
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
 
-            if (currentKioskState === 'idle') {
-                const clean = lower.replace(/[^a-z0-9]/g, '');
-                // Wake word vocabulary strictly covering standard spoken phrases
-                if (clean.includes('pxt') || clean.includes('pxd') || clean.includes('txt') || 
-                    clean.includes('bxt') || clean.includes('hi') || clean.includes('hello') || 
-                    clean.includes('hub') || clean.includes('hey') || clean.includes('wake')) {
-                    try { recognition.abort(); } catch(e) {}
-                    sendPayload('WAKE');
+            recognition.onresult = function(event) {
+                if (isSpeaking || isTriggered) return;
+
+                let liveText = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    liveText += event.results[i][0].transcript;
                 }
-            } else if (liveText.length > 1) {
-                try { recognition.abort(); } catch(e) {}
-                sendPayload(liveText);
-            }
-        };
+                liveText = liveText.trim();
+                const lower = liveText.toLowerCase();
 
-        recognition.onerror = function(event) {
-            if (event.error === 'not-allowed') {
-                if (statusLabel) statusLabel.innerText = 'MIC BLOCKED';
-                if (actionPill) actionPill.innerText = '🔒 Microphone access blocked in browser';
-            }
-        };
+                if (liveText.length > 0 && actionPill) {
+                    actionPill.innerText = 'Heard: "' + liveText + '"';
+                }
 
-        recognition.onend = function() {
-            isRecognizing = false;
-            if (!isSpeaking) {
-                setTimeout(safeStart, 100);
-            }
-        };
+                if (currentKioskState === 'idle') {
+                    const clean = lower.replace(/[^a-z0-9]/g, '');
+                    if (clean.includes('pxt') || clean.includes('hi') || clean.includes('hello') || clean.includes('wake')) {
+                        sendPayload('WAKE');
+                    }
+                } else if (liveText.length > 1) {
+                    sendPayload(liveText);
+                }
+            };
 
-        function safeStart() {
-            if (!isRecognizing && !isSpeaking) {
-                try {
-                    recognition.start();
-                } catch(e) {}
+            recognition.onerror = function(e) {
+                console.log('Recognition status:', e.error);
+            };
+
+            recognition.onend = function() {
+                if (!isSpeaking && !isTriggered) {
+                    try { recognition.start(); } catch(e) {}
+                }
+            };
+        }
+
+        function startAudioEngine() {
+            startAudioEnergyMeter();
+            if (recognition) {
+                try { recognition.start(); } catch(e) {}
             }
         }
 
+        // Text-To-Speech Output
         if (textToSay && 'speechSynthesis' in window) {
             isSpeaking = true;
             window.speechSynthesis.cancel();
@@ -590,19 +610,19 @@ js_code = """
             ut.rate = 0.95;
             ut.onend = function() {
                 isSpeaking = false;
-                safeStart();
+                startAudioEngine();
             };
             ut.onerror = function() {
                 isSpeaking = false;
-                safeStart();
+                startAudioEngine();
             };
             window.speechSynthesis.speak(ut);
         } else {
-            safeStart();
+            startAudioEngine();
         }
 
     } catch(err) {
-        console.log('Voice engine error:', err);
+        console.log('Audio Bridge error:', err);
     }
 })();
 </script>
