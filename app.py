@@ -46,10 +46,11 @@ if "voice_payload" in st.query_params:
     del st.query_params["voice_payload"]
     st.session_state["last_heard"] = spoken_val
     st.session_state["last_interaction"] = time.time()
-    
+
     current_state = st.session_state.get("kiosk_state", "idle")
     if current_state == "idle":
         st.session_state["kiosk_state"] = "asked_badge"
+        st.session_state["last_heard"] = ""  # "WAKE" itself is not a badge number
     st.rerun()
 
 active_video = BANNER_1_URL if st.session_state.active_banner == 1 else BANNER_2_URL
@@ -69,6 +70,7 @@ def load_data():
         {"EmployeeID": "EMP011", "Name": "Usman", "Status": "Present", "RemainingLeaves": "20", "NextOffDay": "Friday"},
     ])
 
+
 def answer_employee_question(emp, question: str) -> str:
     q = question.lower()
     name = emp['Name']
@@ -79,6 +81,7 @@ def answer_employee_question(emp, question: str) -> str:
     elif "status" in q or "present" in q or "absent" in q:
         return f"{name}, your current status is {emp['Status']}."
     return f"{name}, status: {emp['Status']}, leaves: {emp['RemainingLeaves']}, next off: {emp['NextOffDay']}."
+
 
 staff_df = load_data()
 
@@ -92,7 +95,9 @@ if last_act and (time.time() - last_act > RESET_DELAY):
     st.rerun()
 
 # ============================================================
-# CSS
+# CSS  (HUD dot, hologram face, waveforms, bottom pill all live in the
+# MAIN document here — not inside the components.html iframe — so
+# position:fixed / vh actually resolve against the real browser viewport)
 # ============================================================
 st.markdown(
     """
@@ -130,9 +135,13 @@ st.markdown(
             pointer-events: none;
         }
 
+        #kiosk-bg-video::after {
+            content: "";
+        }
+
         .hud-title-wrap {
             position: fixed;
-            top: 10vh;
+            top: 8vh;
             left: 50%;
             transform: translateX(-50%);
             z-index: 30;
@@ -141,6 +150,7 @@ st.markdown(
         }
 
         .hud-pxt-title {
+            font-family: 'Inter', sans-serif;
             font-size: 1.6rem !important;
             font-weight: 800;
             letter-spacing: 0.25em;
@@ -164,10 +174,182 @@ st.markdown(
             display: block;
         }
 
-        /* Glass Deck */
+        /* ---------- Top-Left HUD Indicator ---------- */
+        .top-hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 999999;
+            background: rgba(10, 15, 30, 0.65);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            backdrop-filter: blur(8px);
+            font-family: 'Inter', sans-serif;
+        }
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #f59e0b;
+            box-shadow: 0 0 8px #f59e0b, 0 0 16px rgba(245, 158, 11, 0.6);
+            transition: background 0.3s ease, box-shadow 0.3s ease;
+        }
+        .dot.listening {
+            background: #00e5ff !important;
+            box-shadow: 0 0 12px #00e5ff, 0 0 24px #00e5ff !important;
+            animation: dotPulse 1s infinite alternate;
+        }
+        @keyframes dotPulse {
+            from { transform: scale(0.85); opacity: 0.8; }
+            to   { transform: scale(1.35); opacity: 1; }
+        }
+        .status-txt {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            color: #fbbf24;
+            text-transform: uppercase;
+        }
+        .status-txt.listening { color: #00e5ff !important; }
+
+        /* ---------- Central Holographic Face + Waveforms ---------- */
+        .hologram-stage {
+            position: fixed;
+            top: 46%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 48px;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .wave-col {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            height: 130px;
+        }
+        .wave-col span {
+            display: block;
+            width: 5px;
+            height: 18%;
+            border-radius: 3px;
+            background: linear-gradient(180deg, #7dd3fc, #0ea5e9);
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.7);
+            animation: waveBounce 1.6s ease-in-out infinite;
+        }
+        .wave-col span:nth-child(1) { animation-delay: 0.0s; }
+        .wave-col span:nth-child(2) { animation-delay: 0.15s; }
+        .wave-col span:nth-child(3) { animation-delay: 0.3s; }
+        .wave-col span:nth-child(4) { animation-delay: 0.45s; }
+        .wave-col span:nth-child(5) { animation-delay: 0.3s; }
+        .wave-col span:nth-child(6) { animation-delay: 0.15s; }
+        .wave-col span:nth-child(7) { animation-delay: 0.0s; }
+        .wave-col span:nth-child(8) { animation-delay: 0.2s; }
+        @keyframes waveBounce {
+            0%, 100% { height: 12%; }
+            50% { height: 90%; }
+        }
+        .hologram-stage.listening .wave-col span { animation-duration: 0.65s; }
+
+        .ai-face {
+            position: relative;
+            width: 190px;
+            height: 190px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .face-ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 1.5px solid rgba(56, 189, 248, 0.35);
+            animation: ringSpin 7s linear infinite;
+        }
+        .ring-outer { width: 190px; height: 190px; border-color: rgba(56, 189, 248, 0.22); }
+        .ring-mid   { width: 148px; height: 148px; border-color: rgba(56, 189, 248, 0.45); animation-direction: reverse; animation-duration: 4.5s; }
+        @keyframes ringSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .hologram-stage.listening .ring-outer,
+        .hologram-stage.listening .ring-mid { animation-duration: 1.6s; }
+
+        .face-core {
+            width: 112px;
+            height: 112px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 30%, rgba(186, 230, 253, 0.95), rgba(14, 116, 144, 0.45) 55%, rgba(8, 20, 35, 0.92) 100%);
+            box-shadow: 0 0 30px rgba(56, 189, 248, 0.55), 0 0 60px rgba(56, 189, 248, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: coreGlow 3s ease-in-out infinite;
+        }
+        @keyframes coreGlow {
+            0%, 100% { box-shadow: 0 0 30px rgba(56, 189, 248, 0.5), 0 0 60px rgba(56, 189, 248, 0.25); }
+            50%      { box-shadow: 0 0 46px rgba(56, 189, 248, 0.9), 0 0 92px rgba(56, 189, 248, 0.42); }
+        }
+        .hologram-stage.listening .face-core { animation-duration: 0.9s; }
+
+        .face-svg { width: 72px; height: 72px; overflow: visible; }
+        .face-eye {
+            fill: #e0f7ff;
+            filter: drop-shadow(0 0 4px #7dd3fc);
+            transform-origin: center;
+            animation: eyeBlink 4.5s infinite;
+        }
+        @keyframes eyeBlink {
+            0%, 92%, 100% { transform: scaleY(1); }
+            96% { transform: scaleY(0.12); }
+        }
+        .face-mouth {
+            fill: none;
+            stroke: #7dd3fc;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            filter: drop-shadow(0 0 4px #38bdf8);
+        }
+
+        /* ---------- Bottom Instruction Pill ---------- */
+        .bottom-pill {
+            position: fixed;
+            bottom: 5vh;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 999999;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(56, 189, 248, 0.45);
+            border-radius: 30px;
+            padding: 12px 26px;
+            color: #38bdf8;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            max-width: 82%;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            transition: color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .bottom-pill.listening {
+            color: #00e5ff;
+            border-color: rgba(0, 229, 255, 0.6);
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.35), 0 8px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ---------- Glass Deck (employee card / inputs) ---------- */
         .kiosk-ui-container {
             position: fixed;
-            bottom: 4vh;
+            bottom: 13vh;
             left: 50%;
             transform: translateX(-50%);
             z-index: 200;
@@ -212,259 +394,245 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Background Video & PXT Hub Title
+# Background Video, Title, HUD dot, Hologram face + waveforms, Bottom pill
+# (All static markup + CSS animation lives here in the MAIN document so
+# fixed positioning is correct. JS below only toggles classes/text on it.)
 st.markdown(
     f"""
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+
     <video id="kiosk-bg-video" autoplay loop muted playsinline>
         <source src="{active_video}" type="video/mp4">
     </video>
+
     <div class="hud-title-wrap">
         <div class="hud-pxt-title">{APP_TITLE}</div>
     </div>
     <a href="?switch_banner=true" target="_self" class="theme-dot-anchor" title="Switch Theme"></a>
+
+    <div id="topHud" class="top-hud">
+        <div id="micDot" class="dot"></div>
+        <div id="statusLabel" class="status-txt">STANDBY (SAY "HI PXT")</div>
+    </div>
+
+    <div id="hologramStage" class="hologram-stage">
+        <div class="wave-col wave-left">
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="ai-face">
+            <div class="face-ring ring-outer"></div>
+            <div class="face-ring ring-mid"></div>
+            <div class="face-core">
+                <svg viewBox="0 0 100 100" class="face-svg">
+                    <circle class="face-eye eye-l" cx="35" cy="42" r="4.2"></circle>
+                    <circle class="face-eye eye-r" cx="65" cy="42" r="4.2"></circle>
+                    <path class="face-mouth" d="M30 62 Q50 74 70 62"></path>
+                </svg>
+            </div>
+        </div>
+        <div class="wave-col wave-right">
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+        </div>
+    </div>
+
+    <div id="bottomPill" class="bottom-pill">🎙️ SAY "HI PXT" TO WAKE UP</div>
     """,
     unsafe_allow_html=True,
 )
 
 # ============================================================
-# LIVE VOICE RECOGNITION & HUD COMPONENT (JS BRIDGE)
+# LIVE VOICE RECOGNITION ENGINE (JS BRIDGE)
+# This iframe renders nothing visible (height kept tiny) — it only runs
+# the Web Speech API and reaches into window.parent.document to update
+# the HUD elements rendered above, then bridges recognized text back to
+# Python via a query-param rerun.
 # ============================================================
 current_state = st.session_state.get("kiosk_state", "idle")
 current_emp = st.session_state.get("current_employee")
 
 speak_text = ""
 if current_state == "asked_badge" and not st.session_state.get("last_interaction"):
-    speak_text = "Hello! Please tell me your Badge Number."
+    speak_text = "Hello! Please say your Badge Number."
 elif current_state == "employee_active" and current_emp is not None and not st.session_state.get("last_heard"):
     speak_text = f"Welcome {current_emp['Name']}. How can I assist you today?"
 
+# Escape text for safe embedding inside a JS string literal
+def _js_escape(s: str) -> str:
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+speak_text_js = _js_escape(speak_text)
+
 components.html(
     f"""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap');
-        * {{ font-family: 'Inter', sans-serif; box-sizing: border-box; }}
-        
-        .top-hud {{
-            position: fixed;
-            top: 15px;
-            left: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 999999;
-            background: rgba(10, 15, 30, 0.65);
-            padding: 6px 14px;
-            border-radius: 20px;
-            border: 1px solid rgba(56, 189, 248, 0.3);
-            backdrop-filter: blur(8px);
-        }}
-        .dot {{
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #f59e0b;
-            box-shadow: 0 0 8px #f59e0b;
-            transition: all 0.3s ease;
-        }}
-        .dot.listening {{
-            background: #00e5ff !important;
-            box-shadow: 0 0 12px #00e5ff, 0 0 20px #00e5ff !important;
-            animation: pulse 1s infinite alternate;
-        }}
-        @keyframes pulse {{
-            from {{ transform: scale(0.9); opacity: 0.8; }}
-            to {{ transform: scale(1.3); opacity: 1; }}
-        }}
-        .status-txt {{
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            color: #94a3b8;
-            text-transform: uppercase;
-        }}
-        .status-txt.listening {{
-            color: #00e5ff !important;
-        }}
-        .live-capsule {{
-            position: fixed;
-            top: 15px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(15, 23, 42, 0.85);
-            border: 1px solid rgba(56, 189, 248, 0.4);
-            border-radius: 30px;
-            padding: 5px 16px;
-            color: #38bdf8;
-            font-size: 13px;
-            font-weight: 600;
-            max-width: 65%;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            backdrop-filter: blur(10px);
-            display: none;
-            z-index: 999999;
-        }}
-        .mic-instruction {{
-            position: fixed;
-            top: 32vh;
-            left: 50%;
-            transform: translateX(-50%);
-            text-align: center;
-            z-index: 9999;
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 0.05em;
-            background: rgba(15, 23, 42, 0.6);
-            padding: 8px 18px;
-            border-radius: 20px;
-            border: 1px solid rgba(56, 189, 248, 0.3);
-            backdrop-filter: blur(6px);
-            cursor: pointer;
-        }}
-    </style>
-
-    <div class="top-hud">
-        <div id="micDot" class="dot"></div>
-        <div id="statusLabel" class="status-txt">STANDBY (SAY "HI PXT")</div>
-    </div>
-
-    <div id="liveHeard" class="live-capsule"></div>
-    <div id="micPrompt" class="mic-instruction" onclick="activateMicDirectly()">🎙️ TAP OR SAY "HI PXT" TO WAKE</div>
-
     <script>
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition = null;
-        let isSpeakingOrProcessing = false;
-        const currentKioskState = "{current_state}";
+    (function() {{
+        try {{
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            let recognition = null;
+            let isSpeakingOrProcessing = false;
+            let hasTriggeredThisLoad = false;
+            const currentKioskState = "{current_state}";
 
-        const dot = document.getElementById('micDot');
-        const statusLabel = document.getElementById('statusLabel');
-        const liveCapsule = document.getElementById('liveHeard');
-        const promptBtn = document.getElementById('micPrompt');
+            const pdoc = window.parent.document;
+            const dot = pdoc.getElementById('micDot');
+            const statusLabel = pdoc.getElementById('statusLabel');
+            const bottomPill = pdoc.getElementById('bottomPill');
+            const hologramStage = pdoc.getElementById('hologramStage');
 
-        // Dynamic status display based on kiosk state
-        if (currentKioskState !== "idle") {{
-            dot.className = "dot listening";
-            statusLabel.className = "status-txt listening";
-            statusLabel.innerText = "LISTENING...";
-            promptBtn.innerText = currentKioskState === "asked_badge" 
-                ? "🎙️ SPEAK YOUR BADGE NUMBER (e.g. EMP011)" 
-                : "🎙️ ASK: 'LEAVES LEFT' OR 'NEXT OFF'";
-        }}
+            const DEFAULT_PILL_TEXT = '🎙️ SAY "HI PXT" TO WAKE UP';
+            const BADGE_PILL_TEXT = '🎙️ SPEAK YOUR BADGE NUMBER (e.g. EMP011)';
+            const QUESTION_PILL_TEXT = '🎙️ ASK: "LEAVES LEFT" OR "NEXT OFF"';
 
-        // Text-To-Speech if message available
-        const textToSay = "{speak_text}";
-        if (textToSay && 'speechSynthesis' in window) {{
-            isSpeakingOrProcessing = true;
-            const utterance = new SpeechSynthesisUtterance(textToSay);
-            utterance.rate = 0.95;
-            utterance.onend = () => {{
-                isSpeakingOrProcessing = false;
-                startRecognitionEngine();
-            }};
-            window.speechSynthesis.speak(utterance);
-        }}
-
-        function setListeningVisuals(listening) {{
-            if (listening) {{
-                dot.className = 'dot listening';
-                statusLabel.className = 'status-txt listening';
-                statusLabel.innerText = 'LISTENING...';
-            }} else {{
-                if (currentKioskState === "idle") {{
+            function setListeningVisuals(listening) {{
+                if (!dot || !statusLabel || !bottomPill || !hologramStage) return;
+                if (listening) {{
+                    dot.className = 'dot listening';
+                    statusLabel.className = 'status-txt listening';
+                    statusLabel.innerText = 'LISTENING...';
+                    hologramStage.classList.add('listening');
+                    bottomPill.classList.add('listening');
+                }} else if (currentKioskState === 'idle') {{
                     dot.className = 'dot';
                     statusLabel.className = 'status-txt';
                     statusLabel.innerText = 'STANDBY (SAY "HI PXT")';
+                    hologramStage.classList.remove('listening');
+                    bottomPill.classList.remove('listening');
+                    bottomPill.innerText = DEFAULT_PILL_TEXT;
                 }}
             }}
-        }}
 
-        function startRecognitionEngine() {{
-            if (!SpeechRecognition) {{
-                statusLabel.innerText = 'MIC NOT SUPPORTED';
-                return;
+            // Seed pill text / visuals for the current server-side state
+            if (currentKioskState !== 'idle' && bottomPill) {{
+                bottomPill.innerText = (currentKioskState === 'asked_badge') ? BADGE_PILL_TEXT : QUESTION_PILL_TEXT;
             }}
-            if (recognition) return;
+            if (currentKioskState !== 'idle') {{
+                setListeningVisuals(true);
+            }} else if (bottomPill) {{
+                bottomPill.innerText = DEFAULT_PILL_TEXT;
+            }}
 
-            recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = 'en-US';
+            // Prime mic permission early where allowed (still requires a user
+            // gesture in some browsers — the bottom pill's onclick below
+            // covers that requirement as a manual fallback).
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {{
+                navigator.mediaDevices.getUserMedia({{ audio: true }})
+                    .then(stream => stream.getTracks().forEach(t => t.stop()))
+                    .catch(() => {{ /* permission not yet granted; mic prompt / tap will trigger it */ }});
+            }}
 
-            recognition.onstart = function() {{
-                if (currentKioskState !== "idle") {{
-                    setListeningVisuals(true);
+            // Speak greeting (if any), then start/resume recognition
+            const textToSay = "{speak_text_js}";
+            if (textToSay && 'speechSynthesis' in window) {{
+                isSpeakingOrProcessing = true;
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(textToSay);
+                utterance.rate = 0.95;
+                utterance.onend = () => {{
+                    isSpeakingOrProcessing = false;
+                    startRecognitionEngine();
+                }};
+                window.speechSynthesis.speak(utterance);
+            }}
+
+            function startRecognitionEngine() {{
+                if (!SpeechRecognition) {{
+                    if (statusLabel) statusLabel.innerText = 'MIC NOT SUPPORTED';
+                    return;
                 }}
-            }};
+                if (recognition) return;
 
-            recognition.onresult = function(event) {{
-                if (isSpeakingOrProcessing) return;
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
 
-                let interim = '';
-                let finalPhrase = '';
+                recognition.onstart = function() {{
+                    if (currentKioskState !== 'idle') setListeningVisuals(true);
+                }};
 
-                for (let i = event.resultIndex; i < event.results.length; ++i) {{
-                    const text = event.results[i][0].transcript;
-                    if (event.results[i].isFinal) {{
-                        finalPhrase += text;
-                    }} else {{
-                        interim += text;
+                recognition.onresult = function(event) {{
+                    if (isSpeakingOrProcessing || hasTriggeredThisLoad) return;
+
+                    let interim = '';
+                    let finalPhrase = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {{
+                        const text = event.results[i][0].transcript;
+                        if (event.results[i].isFinal) {{
+                            finalPhrase += text;
+                        }} else {{
+                            interim += text;
+                        }}
                     }}
-                }}
 
-                const heardText = (finalPhrase || interim).trim();
-                const lowerText = heardText.toLowerCase();
+                    const heardText = (finalPhrase || interim).trim();
+                    const lowerText = heardText.toLowerCase();
 
-                if (heardText.length > 0) {{
-                    setListeningVisuals(true);
-                    liveCapsule.style.display = 'block';
-                    liveCapsule.innerText = 'Heard: ' + heardText;
-                }}
+                    if (heardText.length > 0 && bottomPill) {{
+                        setListeningVisuals(true);
+                        bottomPill.innerText = 'Heard: ' + heardText;
+                    }}
 
-                // Idle wake-word detection
-                if (currentKioskState === "idle") {{
-                    if (lowerText.includes("pxt") || lowerText.includes("hi pxt") || lowerText.includes("hey") || lowerText.includes("hello")) {{
+                    if (currentKioskState === 'idle') {{
+                        // Tight wake-word match: "pxt", "hi pxt", "hey pxt" as
+                        // whole words only — avoids false-triggering on any
+                        // stray "hey"/"hello" picked up from ambient talk.
+                        const wakePattern = /\\b(hi\\s*pxt|hey\\s*pxt|pxt)\\b/;
+                        if (wakePattern.test(lowerText)) {{
+                            hasTriggeredThisLoad = true;
+                            isSpeakingOrProcessing = true;
+                            window.parent.location.search = '?voice_payload=' + encodeURIComponent('WAKE');
+                        }}
+                    }} else if (finalPhrase.trim().length > 0) {{
+                        hasTriggeredThisLoad = true;
                         isSpeakingOrProcessing = true;
-                        window.parent.location.search = '?voice_payload=' + encodeURIComponent('WAKE');
+                        window.parent.location.search = '?voice_payload=' + encodeURIComponent(finalPhrase.trim());
                     }}
-                }} else if (finalPhrase.trim().length > 0) {{
-                    isSpeakingOrProcessing = true;
-                    window.parent.location.search = '?voice_payload=' + encodeURIComponent(finalPhrase.trim());
-                }}
-            }};
+                }};
 
-            recognition.onerror = function(e) {{
-                console.log("Mic error / pause: ", e.error);
-            }};
+                recognition.onerror = function(e) {{
+                    console.log('Mic error/pause:', e.error);
+                    // 'not-allowed' means permission was denied — don't loop-restart
+                    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {{
+                        if (statusLabel) statusLabel.innerText = 'MIC PERMISSION NEEDED';
+                    }}
+                }};
 
-            recognition.onend = function() {{
-                // Auto-restart to maintain continuous listening
-                recognition = null;
-                if (!isSpeakingOrProcessing) {{
-                    setTimeout(startRecognitionEngine, 250);
-                }}
-            }};
+                recognition.onend = function() {{
+                    recognition = null;
+                    // Auto-restart to maintain continuous, hands-free listening
+                    if (!isSpeakingOrProcessing && !hasTriggeredThisLoad) {{
+                        setTimeout(startRecognitionEngine, 250);
+                    }}
+                }};
 
-            try {{
-                recognition.start();
-            }} catch(e) {{}}
-        }}
+                try {{ recognition.start(); }} catch(e) {{ /* already started */ }}
+            }}
 
-        function activateMicDirectly() {{
-            if (currentKioskState === "idle") {{
-                window.parent.location.search = '?voice_payload=' + encodeURIComponent('WAKE');
-            }} else {{
+            // Tap-to-activate fallback (satisfies browsers that require a
+            // user gesture before mic/audio APIs may be used)
+            if (bottomPill) {{
+                bottomPill.onclick = function() {{
+                    if (currentKioskState === 'idle') {{
+                        hasTriggeredThisLoad = true;
+                        window.parent.location.search = '?voice_payload=' + encodeURIComponent('WAKE');
+                    }} else {{
+                        startRecognitionEngine();
+                    }}
+                }};
+            }}
+
+            if (!textToSay) {{
                 startRecognitionEngine();
             }}
+        }} catch (err) {{
+            console.log('Voice bridge init failed:', err);
         }}
-
-        // Initialize listener
-        startRecognitionEngine();
+    }})();
     </script>
     """,
-    height=80,
+    height=0,
 )
 
 # ============================================================
@@ -529,13 +697,15 @@ elif current_state == "employee_active":
         ans = answer_employee_question(emp, active_q)
         st.session_state["last_heard"] = ""
         st.success(ans)
-        
+
         # Voice speak answer
+        ans_js = _js_escape(ans)
         components.html(
             f"""
             <script>
                 if ('speechSynthesis' in window) {{
-                    const u = new SpeechSynthesisUtterance("{ans}");
+                    window.speechSynthesis.cancel();
+                    const u = new SpeechSynthesisUtterance("{ans_js}");
                     u.rate = 0.95;
                     window.speechSynthesis.speak(u);
                 }}
