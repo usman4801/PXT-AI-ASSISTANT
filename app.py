@@ -1,3 +1,9 @@
+"""
+PXT HUB - Clean Cyber Kiosk with Real-Time Continuous Speech Recognition & Wake Word
+"""
+
+from __future__ import annotations
+
 import os
 import time
 import pandas as pd
@@ -437,7 +443,7 @@ components.html(
     (function() {{
         try {{
             if (window.frameElement) {{
-                window.frameElement.setAttribute("allow", "microphone; speech-recognition;");
+                window.frameElement.setAttribute("allow", "microphone *;");
             }}
 
             const pdoc = window.parent.document;
@@ -495,7 +501,7 @@ components.html(
                 try {{ recognition.stop(); }} catch(e) {{}}
                 const currentUrl = new URL(window.parent.location.href);
                 currentUrl.searchParams.set('voice_payload', val);
-                window.parent.location.href = currentUrl.toString();
+                window.parent.location.replace(currentUrl.toString());
             }}
 
             recognition.onstart = function() {{
@@ -518,31 +524,31 @@ components.html(
                 const lower = liveText.toLowerCase();
 
                 if (liveText.length > 0) {{
+                    console.log("Raw Heard:", liveText);
                     updateUI(true, 'Heard: "' + liveText + '"');
                 }}
 
-                if (currentKioskState === 'idle') {{
-                    const normalized = lower.replace(/[^a-z]/g, '');
+                if (currentKioskState === 'idle') {
+                    const normalized = lower.replace(/[^a-z0-9]/g, '');
                     const isWakeTrigger = 
                         normalized.includes('pxt') || 
                         normalized.includes('pxd') || 
                         normalized.includes('txt') || 
-                        normalized.includes('hipxt') || 
+                        normalized.includes('bxt') || 
+                        normalized.includes('ext') || 
+                        normalized.includes('hi') || 
                         normalized.includes('hello') || 
                         normalized.includes('hub');
 
                     if (isWakeTrigger) {{
                         triggerBackend('WAKE');
                     }}
-                }} else if (isFinal && liveText.length > 0) {{
+                } else if (isFinal && liveText.length > 0) {{
                     triggerBackend(liveText);
                 }}
             }};
 
             recognition.onerror = function(event) {{
-                if (event.error !== 'no-speech') {{
-                    console.log('Recognition Status:', event.error);
-                }}
                 if (event.error === 'not-allowed') {{
                     if (statusLabel) statusLabel.innerText = 'MIC BLOCKED';
                     if (bottomPill) bottomPill.innerText = '🔒 Click to Allow Mic';
@@ -552,8 +558,7 @@ components.html(
             recognition.onend = function() {{
                 isRecognizing = false;
                 if (!isSpeaking) {{
-                    updateUI(false);
-                    setTimeout(safeStart, 200);
+                    setTimeout(safeStart, 100);
                 }}
             }};
 
