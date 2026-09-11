@@ -299,49 +299,44 @@ st.markdown(
             filter: drop-shadow(0 0 10px #7dd3fc);
         }
 
-        /* Bottom Action Button */
-        .bottom-pill-btn {
+        /* Native Streamlit Button Styled as Cyber Pill */
+        .bottom-pill-wrap {
             position: fixed;
             bottom: 5vh;
             left: 50%;
             transform: translateX(-50%);
             z-index: 999999;
-            background: rgba(15, 23, 42, 0.92);
-            border: 1.5px solid rgba(56, 189, 248, 0.6);
-            border-radius: 30px;
-            padding: 13px 30px;
-            color: #38bdf8;
-            font-family: 'Inter', sans-serif;
-            font-size: 15px;
-            font-weight: 700;
-            letter-spacing: 0.04em;
-            max-width: 85%;
+            width: auto;
             text-align: center;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            backdrop-filter: blur(12px);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
-            cursor: pointer;
-            outline: none;
-            transition: all 0.25s ease;
         }
-        .bottom-pill-btn:hover {
-            color: #ffffff;
-            border-color: #00e5ff;
-            box-shadow: 0 0 24px rgba(0, 229, 255, 0.55);
-            transform: translateX(-50%) scale(1.02);
+
+        .bottom-pill-wrap div[data-testid="stButton"] button {
+            background: rgba(15, 23, 42, 0.92) !important;
+            border: 1.5px solid rgba(56, 189, 248, 0.6) !important;
+            border-radius: 30px !important;
+            padding: 12px 30px !important;
+            color: #38bdf8 !important;
+            font-family: 'Inter', sans-serif !important;
+            font-size: 15px !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.04em !important;
+            backdrop-filter: blur(12px) !important;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
+            cursor: pointer !important;
+            transition: all 0.25s ease !important;
         }
-        .bottom-pill-btn.listening {
-            color: #00e5ff;
-            border-color: rgba(0, 229, 255, 0.8);
-            box-shadow: 0 0 22px rgba(0, 229, 255, 0.45);
+
+        .bottom-pill-wrap div[data-testid="stButton"] button:hover {
+            color: #ffffff !important;
+            border-color: #00e5ff !important;
+            box-shadow: 0 0 24px rgba(0, 229, 255, 0.55) !important;
+            transform: scale(1.03) !important;
         }
 
         /* Glass Deck */
         .kiosk-ui-container {
             position: fixed;
-            bottom: 13vh;
+            bottom: 14vh;
             left: 50%;
             transform: translateX(-50%);
             z-index: 200;
@@ -425,13 +420,20 @@ st.markdown(
             <span></span><span></span><span></span><span></span>
         </div>
     </div>
-
-    <button id="bottomPill" class="bottom-pill-btn" onclick="window.location.href = window.location.pathname + '?voice_payload=WAKE';">
-        🎙️ Say "Hi PXT" or Click here
-    </button>
     """,
     unsafe_allow_html=True,
 )
+
+# Render Native Bottom Action Button
+st.markdown('<div class="bottom-pill-wrap">', unsafe_allow_html=True)
+pill_title = '🎙️ Say "Hi PXT" or Click here' if current_state == "idle" else '🎙️ Speak or Type below'
+if st.button(pill_title, key="main_pill_btn"):
+    if current_state == "idle":
+        st.session_state["kiosk_state"] = "asked_badge"
+        st.session_state["last_heard"] = ""
+        st.session_state["last_interaction"] = time.time()
+        st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================================
 # SPEECH SYNTHESIS & ROBUST MIC ENGINE (JS BRIDGE)
@@ -452,7 +454,6 @@ js_code = """
         const pdoc = window.parent.document;
         const dot = pdoc.getElementById('micDot');
         const statusLabel = pdoc.getElementById('statusLabel');
-        const bottomPill = pdoc.getElementById('bottomPill');
         const hologramStage = pdoc.getElementById('hologramStage');
 
         const currentKioskState = %CURRENT_STATE%;
@@ -462,33 +463,29 @@ js_code = """
         
         if (!SpeechRecognition) {
             if (statusLabel) statusLabel.innerText = "CHROME NEEDED";
-            if (bottomPill) bottomPill.innerText = "⚠️ Voice requires Google Chrome";
             return;
         }
 
         let recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = navigator.language || 'en-US';
+        recognition.lang = 'en-US';
 
         let isSpeaking = false;
         let isRecognizing = false;
 
-        function updateUI(listening, customText) {
-            if (!dot || !statusLabel || !bottomPill || !hologramStage) return;
+        function updateUI(listening) {
+            if (!dot || !statusLabel || !hologramStage) return;
             if (listening) {
                 dot.className = 'dot listening';
                 statusLabel.className = 'status-txt listening';
                 statusLabel.innerText = 'LISTENING...';
                 hologramStage.classList.add('listening');
-                bottomPill.classList.add('listening');
-                if (customText) bottomPill.innerText = customText;
             } else {
                 dot.className = 'dot';
                 statusLabel.className = 'status-txt';
                 statusLabel.innerText = 'STANDBY';
                 hologramStage.classList.remove('listening');
-                bottomPill.classList.remove('listening');
             }
         }
 
@@ -497,13 +494,6 @@ js_code = """
             try { recognition.stop(); } catch(e) {}
             window.parent.location.href = window.parent.location.pathname + '?voice_payload=' + encodeURIComponent(val);
         }
-
-        // Live Audio Detect Indicator
-        recognition.onsoundstart = function() {
-            if (bottomPill && currentKioskState === 'idle') {
-                bottomPill.innerText = "🔊 Audio Detected... Sun raha hoon!";
-            }
-        };
 
         recognition.onstart = function() {
             isRecognizing = true;
@@ -523,10 +513,6 @@ js_code = """
 
             liveText = liveText.trim();
             const lower = liveText.toLowerCase();
-
-            if (liveText.length > 0) {
-                updateUI(true, 'Heard: "' + liveText + '"');
-            }
 
             if (currentKioskState === 'idle') {
                 const normalized = lower.replace(/[^a-z0-9]/g, '');
@@ -551,16 +537,13 @@ js_code = """
         recognition.onerror = function(event) {
             if (event.error === 'not-allowed') {
                 if (statusLabel) statusLabel.innerText = 'MIC BLOCKED';
-                if (bottomPill) bottomPill.innerText = '🔒 Please Allow Microphone in Browser';
-            } else if (event.error === 'network') {
-                if (bottomPill) bottomPill.innerText = '⚠️ Speech Network Offline - Click to use';
             }
         };
 
         recognition.onend = function() {
             isRecognizing = false;
             if (!isSpeaking) {
-                setTimeout(safeStart, 150);
+                setTimeout(safeStart, 200);
             }
         };
 
