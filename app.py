@@ -401,7 +401,7 @@ st.markdown(
 
     <div id="topHud" class="top-hud">
         <div id="micDot" class="dot"></div>
-        <div id="statusLabel" class="status-txt">STANDBY (SAY "HI PXT")</div>
+        <div id="statusLabel" class="status-txt">STANDBY</div>
     </div>
 
     <div id="hologramStage" class="hologram-stage">
@@ -422,7 +422,7 @@ st.markdown(
         </div>
     </div>
 
-    <div id="bottomPill" class="bottom-pill">🎙️ SAY "HI PXT" TO WAKE UP</div>
+    <div id="bottomPill" class="bottom-pill">🎙️ Say "Hi PXT"!</div>
     """,
     unsafe_allow_html=True,
 )
@@ -466,9 +466,9 @@ components.html(
             const bottomPill = pdoc.getElementById('bottomPill');
             const hologramStage = pdoc.getElementById('hologramStage');
 
-            const DEFAULT_PILL_TEXT = '🎙️ SAY "HI PXT" TO WAKE UP';
-            const BADGE_PILL_TEXT = '🎙️ SPEAK YOUR BADGE NUMBER (e.g. EMP011)';
-            const QUESTION_PILL_TEXT = '🎙️ ASK: "LEAVES LEFT" OR "NEXT OFF"';
+            const DEFAULT_PILL_TEXT = '🎙️ Say "Hi PXT"!';
+            const BADGE_PILL_TEXT = '🎙️ Speak your Badge Number';
+            const QUESTION_PILL_TEXT = '🎙️ Ask about leaves or next off';
 
             const isSecureCtx = window.isSecureContext === true;
             const speechSupported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -478,13 +478,13 @@ components.html(
                 // Firefox does not implement it at all, regardless of mic
                 // permissions. This is a browser-support issue, not a mic
                 // hardware/permission issue.
-                if (statusLabel) statusLabel.innerText = 'USE CHROME OR EDGE FOR VOICE';
-                if (bottomPill) bottomPill.innerText = '⌨️ VOICE NEEDS CHROME/EDGE — TYPE BELOW INSTEAD';
+                if (statusLabel) statusLabel.innerText = 'USE CHROME/EDGE';
+                if (bottomPill) bottomPill.innerText = '⌨️ Type below instead';
             }} else if (!isSecureCtx) {{
                 // Even in a supported browser, SpeechRecognition/getUserMedia
                 // require a secure context (https:// or localhost).
-                if (statusLabel) statusLabel.innerText = 'PAGE NOT SERVED OVER HTTPS';
-                if (bottomPill) bottomPill.innerText = '🔒 NEEDS HTTPS FOR MIC ACCESS — TYPE BELOW INSTEAD';
+                if (statusLabel) statusLabel.innerText = 'NEEDS HTTPS';
+                if (bottomPill) bottomPill.innerText = '🔒 Type below instead';
             }}
 
             function setListeningVisuals(listening) {{
@@ -498,7 +498,7 @@ components.html(
                 }} else if (currentKioskState === 'idle') {{
                     dot.className = 'dot';
                     statusLabel.className = 'status-txt';
-                    statusLabel.innerText = 'STANDBY (SAY "HI PXT")';
+                    statusLabel.innerText = 'STANDBY';
                     hologramStage.classList.remove('listening');
                     bottomPill.classList.remove('listening');
                     bottomPill.innerText = DEFAULT_PILL_TEXT;
