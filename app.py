@@ -76,12 +76,12 @@ def load_data():
 def answer_employee_question(emp, question: str) -> str:
     q = question.lower()
     name = emp['Name']
-    if "leave" in q or "chutti" in q or "remaining" in q:
+    if "leave" in q or "remaining" in q or "vacation" in q:
         return f"{name}, you have {emp['RemainingLeaves']} remaining leaves."
     elif "off" in q or "holiday" in q or "weekend" in q:
-        return f"{name}, your next off day is on {emp['NextOffDay']}."
+        return f"{name}, your next off day is scheduled on {emp['NextOffDay']}."
     elif "status" in q or "present" in q or "absent" in q:
-        return f"{name}, your current status is {emp['Status']}."
+        return f"{name}, your current attendance status is {emp['Status']}."
     return f"{name}, status: {emp['Status']}, leaves: {emp['RemainingLeaves']}, next off: {emp['NextOffDay']}."
 
 
@@ -389,7 +389,7 @@ current_emp = st.session_state.get("current_employee")
 
 pill_initial_text = '🎙️ Say "Hi PXT" or Click here' if current_state == "idle" else '🎙️ Speak or Type below'
 
-# Render Background, Hologram & Permanent Action Pill
+# Render Background, Hologram & Action Pill
 st.markdown(
     f"""
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
@@ -436,9 +436,9 @@ st.markdown(
 # ============================================================
 speak_text = ""
 if current_state == "asked_badge" and not st.session_state.get("last_heard"):
-    speak_text = "Please say or type your badge number."
+    speak_text = "Please say or enter your badge number."
 elif current_state == "employee_active" and current_emp is not None and not st.session_state.get("last_heard"):
-    speak_text = f"Welcome {current_emp['Name']}. What would you like to know?"
+    speak_text = f"Welcome {current_emp['Name']}. How can I assist you today?"
 
 js_state_json = json.dumps(current_state)
 js_speak_json = json.dumps(speak_text)
@@ -475,13 +475,13 @@ js_code = """
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            if (statusLabel) statusLabel.innerText = "CHROME NEEDED";
-            if (actionPill) actionPill.innerText = "⚠️ Please open in Chrome";
+            if (statusLabel) statusLabel.innerText = "CHROME REQUIRED";
+            if (actionPill) actionPill.innerText = "⚠️ Voice requires Google Chrome";
             return;
         }
 
         let recognition = new SpeechRecognition();
-        recognition.continuous = false; // Fast single-shot matching avoids server hangs
+        recognition.continuous = false;
         recognition.interimResults = true;
         recognition.lang = 'en-US';
 
@@ -518,16 +518,16 @@ js_code = """
             updateUI(true);
         };
 
-        // Live Audio Hardware Activity Indicator
+        // Live Audio Hardware Activity Indicators in pure English
         recognition.onaudiostart = function() {
             if (actionPill && currentKioskState === 'idle') {
-                actionPill.innerText = "⚡ Mic Connected... Bolen!";
+                actionPill.innerText = "⚡ Mic Active... Listening";
             }
         };
 
         recognition.onsoundstart = function() {
             if (actionPill && currentKioskState === 'idle') {
-                actionPill.innerText = "🔊 Awaz sun raha hoon...";
+                actionPill.innerText = "🔊 Audio Detected...";
             }
         };
 
@@ -548,10 +548,10 @@ js_code = """
 
             if (currentKioskState === 'idle') {
                 const clean = lower.replace(/[^a-z0-9]/g, '');
-                // Broad wake vocabulary covers any near-pronunciation
+                // Wake word vocabulary strictly covering standard spoken phrases
                 if (clean.includes('pxt') || clean.includes('pxd') || clean.includes('txt') || 
                     clean.includes('bxt') || clean.includes('hi') || clean.includes('hello') || 
-                    clean.includes('hub') || clean.includes('hey') || clean.includes('pakistan')) {
+                    clean.includes('hub') || clean.includes('hey') || clean.includes('wake')) {
                     try { recognition.abort(); } catch(e) {}
                     sendPayload('WAKE');
                 }
@@ -564,7 +564,7 @@ js_code = """
         recognition.onerror = function(event) {
             if (event.error === 'not-allowed') {
                 if (statusLabel) statusLabel.innerText = 'MIC BLOCKED';
-                if (actionPill) actionPill.innerText = '🔒 Browser mic blocked - check URL lock icon';
+                if (actionPill) actionPill.innerText = '🔒 Microphone access blocked in browser';
             }
         };
 
@@ -602,7 +602,7 @@ js_code = """
         }
 
     } catch(err) {
-        console.log('Bridge error:', err);
+        console.log('Voice engine error:', err);
     }
 })();
 </script>
@@ -617,7 +617,7 @@ st.markdown('<div class="kiosk-ui-container">', unsafe_allow_html=True)
 
 # 1. State: Asked Badge
 if current_state == "asked_badge":
-    badge_in = st.text_input("badge_in", placeholder="Type Badge No (e.g. EMP011) or Speak", label_visibility="collapsed")
+    badge_in = st.text_input("badge_in", placeholder="Enter Badge ID (e.g. EMP011) or speak", label_visibility="collapsed")
     active_input = st.session_state.get("last_heard") or badge_in
 
     if active_input and active_input != "WAKE":
@@ -633,7 +633,7 @@ if current_state == "asked_badge":
             st.session_state["last_interaction"] = time.time()
             st.rerun()
         elif badge_in:
-            st.error("Badge Number not found. Please try again.")
+            st.error("Badge ID not recognized. Please try again.")
 
 # 2. State: Employee Active
 elif current_state == "employee_active":
@@ -664,7 +664,7 @@ elif current_state == "employee_active":
         unsafe_allow_html=True,
     )
 
-    q_box = st.text_input("ask_q", placeholder="Type: 'leaves left' or 'next off' or Speak", label_visibility="collapsed")
+    q_box = st.text_input("ask_q", placeholder="Ask: 'leaves left' or 'next off' or speak", label_visibility="collapsed")
     active_q = st.session_state.get("last_heard") or q_box
 
     if active_q and active_q != "WAKE":
