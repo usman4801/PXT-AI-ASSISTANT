@@ -41,20 +41,6 @@ if "switch_banner" in st.query_params:
     del st.query_params["switch_banner"]
     st.rerun()
 
-# Receive voice input from JavaScript bridge via Query Params
-if "voice_payload" in st.query_params:
-    spoken_val = str(st.query_params["voice_payload"]).strip()
-    del st.query_params["voice_payload"]
-    st.session_state["last_interaction"] = time.time()
-
-    current_state = st.session_state.get("kiosk_state", "idle")
-    if current_state == "idle":
-        st.session_state["kiosk_state"] = "asked_badge"
-        st.session_state["last_heard"] = ""
-    else:
-        st.session_state["last_heard"] = spoken_val
-    st.rerun()
-
 active_video = BANNER_1_URL if st.session_state.active_banner == 1 else BANNER_2_URL
 
 # ============================================================
@@ -366,6 +352,15 @@ st.markdown(
         .status-present { color: #34d399; }
         .status-leave { color: #fb923c; }
 
+        /* Hide the internal bridge input */
+        .hidden-bridge-box {
+            position: absolute !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            height: 0 !important;
+            width: 0 !important;
+        }
+
         div[data-testid="stTextInput"] input {
             background: rgba(15, 23, 42, 0.9) !important;
             border: 1.5px solid rgba(56, 189, 248, 0.45) !important;
@@ -436,7 +431,7 @@ elif current_state == "employee_active" and current_emp is not None and not st.s
 js_state_json = json.dumps(current_state)
 js_speak_json = json.dumps(speak_text)
 
-# Raw JS without any Python f-string conflicts
+# Seamless event-driven JavaScript bridge
 js_code = """
 <script>
 (function() {
@@ -491,12 +486,16 @@ js_code = """
             }
         }
 
-        function triggerBackend(val) {
+        // Send text to Streamlit without reloading the page
+        function sendToStreamlit(val) {
             if (isSpeaking) return;
-            try { recognition.stop(); } catch(e) {}
-            const currentUrl = new URL(window.parent.location.href);
-            currentUrl.searchParams.set('voice_payload', val);
-            window.parent.location.replace(currentUrl.toString());
+            const inputField = pdoc.querySelector('input[aria-label="hidden_voice_receiver"]');
+            if (inputField) {
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                nativeInputValueSetter.call(inputField, val);
+                inputField.dispatchEvent(new Event('input', { bubbles: true }));
+                inputField.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', code: 'Enter', keyCode: 13 }));
+            }
         }
 
         recognition.onstart = function() {
@@ -519,7 +518,6 @@ js_code = """
             const lower = liveText.toLowerCase();
 
             if (liveText.length > 0) {
-                console.log("Raw Heard:", liveText);
                 updateUI(true, 'Heard: "' + liveText + '"');
             }
 
@@ -536,10 +534,10 @@ js_code = """
                     normalized.includes('hub');
 
                 if (isWakeTrigger) {
-                    triggerBackend('WAKE');
+                    sendToStreamlit('WAKE');
                 }
             } else if (isFinal && liveText.length > 0) {
-                triggerBackend(liveText);
+                sendToStreamlit(liveText);
             }
         };
 
@@ -568,7 +566,7 @@ js_code = """
         if (bottomPill) {
             bottomPill.onclick = function() {
                 if (currentKioskState === 'idle') {
-                    triggerBackend('WAKE');
+                    sendToStreamlit('WAKE');
                 } else {
                     safeStart();
                 }
@@ -601,6 +599,24 @@ js_code = """
 """.replace("%CURRENT_STATE%", js_state_json).replace("%SPEAK_TEXT%", js_speak_json)
 
 components.html(js_code, height=0)
+
+# Hidden Direct Bridge Receiver Input
+st.markdown('<div class="hidden-bridge-box">', unsafe_allow_html=True)
+bridge_val = st.text_input("hidden_voice_receiver", key="hidden_voice_receiver", label_visibility="collapsed")
+st.markdown('</div>', unsafe_allow_html=True)
+
+if bridge_val:
+    val = bridge_val.strip()
+    st.session_state["hidden_voice_receiver"] = ""
+    st.session_state["last_interaction"] = time.time()
+    
+    if current_state == "idle" and ("WAKE" in val or "wake" in val.lower()):
+        st.session_state["kiosk_state"] = "asked_badge"
+        st.session_state["last_heard"] = ""
+        st.rerun()
+    elif current_state != "idle":
+        st.session_state["last_heard"] = val
+        st.rerun()
 
 # ============================================================
 # BOTTOM DECK (CARDS & INPUTS)
