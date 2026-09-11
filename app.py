@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import time
+import json
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -432,180 +433,174 @@ if current_state == "asked_badge" and not st.session_state.get("last_heard"):
 elif current_state == "employee_active" and current_emp is not None and not st.session_state.get("last_heard"):
     speak_text = f"Welcome {current_emp['Name']}. What would you like to know?"
 
-def _js_escape(s: str) -> str:
-    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+js_state_json = json.dumps(current_state)
+js_speak_json = json.dumps(speak_text)
 
-speak_text_js = _js_escape(speak_text)
+# Raw JS without any Python f-string conflicts
+js_code = """
+<script>
+(function() {
+    try {
+        const pdoc = window.parent.document;
+        const dot = pdoc.getElementById('micDot');
+        const statusLabel = pdoc.getElementById('statusLabel');
+        const bottomPill = pdoc.getElementById('bottomPill');
+        const hologramStage = pdoc.getElementById('hologramStage');
 
-components.html(
-    f"""
-    <script>
-    (function() {{
-        try {{
-            if (window.frameElement) {{
-                window.frameElement.setAttribute("allow", "microphone *;");
-            }}
+        const currentKioskState = %CURRENT_STATE%;
+        const textToSay = %SPEAK_TEXT%;
 
-            const pdoc = window.parent.document;
-            const dot = pdoc.getElementById('micDot');
-            const statusLabel = pdoc.getElementById('statusLabel');
-            const bottomPill = pdoc.getElementById('bottomPill');
-            const hologramStage = pdoc.getElementById('hologramStage');
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        if (!SpeechRecognition) {
+            if (statusLabel) statusLabel.innerText = "CHROME NEEDED";
+            if (bottomPill) bottomPill.innerText = "⚠️ Voice requires Google Chrome";
+            return;
+        }
 
-            const currentKioskState = "{current_state}";
-            const textToSay = "{speak_text_js}";
+        let recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
 
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            
-            if (!SpeechRecognition) {{
-                if (statusLabel) statusLabel.innerText = "CHROME NEEDED";
-                if (bottomPill) bottomPill.innerText = "⚠️ Voice requires Google Chrome";
-                return;
-            }}
+        let isSpeaking = false;
+        let isRecognizing = false;
 
-            let recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = 'en-US';
-
-            let isSpeaking = false;
-            let isRecognizing = false;
-
-            function updateUI(listening, customText) {{
-                if (!dot || !statusLabel || !bottomPill || !hologramStage) return;
-                if (listening) {{
-                    dot.className = 'dot listening';
-                    statusLabel.className = 'status-txt listening';
-                    statusLabel.innerText = 'LISTENING...';
-                    hologramStage.classList.add('listening');
-                    bottomPill.classList.add('listening');
-                    if (customText) bottomPill.innerText = customText;
-                }} else {{
-                    dot.className = 'dot';
-                    statusLabel.className = 'status-txt';
-                    statusLabel.innerText = 'STANDBY';
-                    hologramStage.classList.remove('listening');
-                    bottomPill.classList.remove('listening');
-                    if (currentKioskState === 'idle') {{
-                        bottomPill.innerText = '🎙️ Say "Hi PXT" or Click here';
-                    }} else if (currentKioskState === 'asked_badge') {{
-                        bottomPill.innerText = '🎙️ Speak Badge Number (e.g. EMP011)';
-                    }} else {{
-                        bottomPill.innerText = '🎙️ Ask: "Leaves" or "Next off"';
-                    }}
-                }}
-            }}
-
-            function triggerBackend(val) {{
-                if (isSpeaking) return;
-                try {{ recognition.stop(); }} catch(e) {{}}
-                const currentUrl = new URL(window.parent.location.href);
-                currentUrl.searchParams.set('voice_payload', val);
-                window.parent.location.replace(currentUrl.toString());
-            }}
-
-            recognition.onstart = function() {{
-                isRecognizing = true;
-                updateUI(true);
-            }};
-
-            recognition.onresult = function(event) {{
-                if (isSpeaking) return;
-
-                let liveText = '';
-                let isFinal = false;
-
-                for (let i = event.resultIndex; i < event.results.length; ++i) {{
-                    liveText += event.results[i][0].transcript;
-                    if (event.results[i].isFinal) isFinal = true;
-                }}
-
-                liveText = liveText.trim();
-                const lower = liveText.toLowerCase();
-
-                if (liveText.length > 0) {{
-                    console.log("Raw Heard:", liveText);
-                    updateUI(true, 'Heard: "' + liveText + '"');
-                }}
-
+        function updateUI(listening, customText) {
+            if (!dot || !statusLabel || !bottomPill || !hologramStage) return;
+            if (listening) {
+                dot.className = 'dot listening';
+                statusLabel.className = 'status-txt listening';
+                statusLabel.innerText = 'LISTENING...';
+                hologramStage.classList.add('listening');
+                bottomPill.classList.add('listening');
+                if (customText) bottomPill.innerText = customText;
+            } else {
+                dot.className = 'dot';
+                statusLabel.className = 'status-txt';
+                statusLabel.innerText = 'STANDBY';
+                hologramStage.classList.remove('listening');
+                bottomPill.classList.remove('listening');
                 if (currentKioskState === 'idle') {
-                    const normalized = lower.replace(/[^a-z0-9]/g, '');
-                    const isWakeTrigger = 
-                        normalized.includes('pxt') || 
-                        normalized.includes('pxd') || 
-                        normalized.includes('txt') || 
-                        normalized.includes('bxt') || 
-                        normalized.includes('ext') || 
-                        normalized.includes('hi') || 
-                        normalized.includes('hello') || 
-                        normalized.includes('hub');
+                    bottomPill.innerText = '🎙️ Say "Hi PXT" or Click here';
+                } else if (currentKioskState === 'asked_badge') {
+                    bottomPill.innerText = '🎙️ Speak Badge Number (e.g. EMP011)';
+                } else {
+                    bottomPill.innerText = '🎙️ Ask: "Leaves" or "Next off"';
+                }
+            }
+        }
 
-                    if (isWakeTrigger) {{
-                        triggerBackend('WAKE');
-                    }}
-                } else if (isFinal && liveText.length > 0) {{
-                    triggerBackend(liveText);
-                }}
-            }};
+        function triggerBackend(val) {
+            if (isSpeaking) return;
+            try { recognition.stop(); } catch(e) {}
+            const currentUrl = new URL(window.parent.location.href);
+            currentUrl.searchParams.set('voice_payload', val);
+            window.parent.location.replace(currentUrl.toString());
+        }
 
-            recognition.onerror = function(event) {{
-                if (event.error === 'not-allowed') {{
-                    if (statusLabel) statusLabel.innerText = 'MIC BLOCKED';
-                    if (bottomPill) bottomPill.innerText = '🔒 Click to Allow Mic';
-                }}
-            }};
+        recognition.onstart = function() {
+            isRecognizing = true;
+            updateUI(true);
+        };
 
-            recognition.onend = function() {{
-                isRecognizing = false;
-                if (!isSpeaking) {{
-                    setTimeout(safeStart, 100);
-                }}
-            }};
+        recognition.onresult = function(event) {
+            if (isSpeaking) return;
 
-            function safeStart() {{
-                if (!isRecognizing && !isSpeaking) {{
-                    try {{
-                        recognition.start();
-                    }} catch(e) {{}}
-                }}
-            }}
+            let liveText = '';
+            let isFinal = false;
 
-            if (bottomPill) {{
-                bottomPill.onclick = function() {{
-                    if (currentKioskState === 'idle') {{
-                        triggerBackend('WAKE');
-                    }} else {{
-                        safeStart();
-                    }}
-                }};
-            }}
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                liveText += event.results[i][0].transcript;
+                if (event.results[i].isFinal) isFinal = true;
+            }
 
-            if (textToSay && 'speechSynthesis' in window) {{
-                isSpeaking = true;
-                window.speechSynthesis.cancel();
-                const ut = new SpeechSynthesisUtterance(textToSay);
-                ut.rate = 0.95;
-                ut.onend = function() {{
-                    isSpeaking = false;
+            liveText = liveText.trim();
+            const lower = liveText.toLowerCase();
+
+            if (liveText.length > 0) {
+                console.log("Raw Heard:", liveText);
+                updateUI(true, 'Heard: "' + liveText + '"');
+            }
+
+            if (currentKioskState === 'idle') {
+                const normalized = lower.replace(/[^a-z0-9]/g, '');
+                const isWakeTrigger = 
+                    normalized.includes('pxt') || 
+                    normalized.includes('pxd') || 
+                    normalized.includes('txt') || 
+                    normalized.includes('bxt') || 
+                    normalized.includes('ext') || 
+                    normalized.includes('hi') || 
+                    normalized.includes('hello') || 
+                    normalized.includes('hub');
+
+                if (isWakeTrigger) {
+                    triggerBackend('WAKE');
+                }
+            } else if (isFinal && liveText.length > 0) {
+                triggerBackend(liveText);
+            }
+        };
+
+        recognition.onerror = function(event) {
+            if (event.error === 'not-allowed') {
+                if (statusLabel) statusLabel.innerText = 'MIC BLOCKED';
+                if (bottomPill) bottomPill.innerText = '🔒 Click to Allow Mic';
+            }
+        };
+
+        recognition.onend = function() {
+            isRecognizing = false;
+            if (!isSpeaking) {
+                setTimeout(safeStart, 100);
+            }
+        };
+
+        function safeStart() {
+            if (!isRecognizing && !isSpeaking) {
+                try {
+                    recognition.start();
+                } catch(e) {}
+            }
+        }
+
+        if (bottomPill) {
+            bottomPill.onclick = function() {
+                if (currentKioskState === 'idle') {
+                    triggerBackend('WAKE');
+                } else {
                     safeStart();
-                }};
-                ut.onerror = function() {{
-                    isSpeaking = false;
-                    safeStart();
-                }};
-                window.speechSynthesis.speak(ut);
-            }} else {{
+                }
+            };
+        }
+
+        if (textToSay && 'speechSynthesis' in window) {
+            isSpeaking = true;
+            window.speechSynthesis.cancel();
+            const ut = new SpeechSynthesisUtterance(textToSay);
+            ut.rate = 0.95;
+            ut.onend = function() {
+                isSpeaking = false;
                 safeStart();
-            }}
+            };
+            ut.onerror = function() {
+                isSpeaking = false;
+                safeStart();
+            };
+            window.speechSynthesis.speak(ut);
+        } else {
+            safeStart();
+        }
 
-        }} catch(err) {{
-            console.log('Bridge error:', err);
-        }}
-    }})();
-    </script>
-    """,
-    height=0,
-)
+    } catch(err) {
+        console.log('Bridge error:', err);
+    }
+})();
+</script>
+""".replace("%CURRENT_STATE%", js_state_json).replace("%SPEAK_TEXT%", js_speak_json)
+
+components.html(js_code, height=0)
 
 # ============================================================
 # BOTTOM DECK (CARDS & INPUTS)
