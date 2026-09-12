@@ -1,6 +1,6 @@
 """
-PXT Hub - Full Voice Kiosk with Background Video & Theme Switcher
-Single-file app (No external HTML file needed)
+PXT Hub - Hands-Free Voice Kiosk (Wake Word: "Hi PXT")
+Single-File Streamlit Application
 """
 import json
 import os
@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 ADMIN_PASSWORD = "pxt123"
 
-# Look for data file automatically
+# Data file path setup
 data_file_path = os.path.join(APP_DIR, "data.xlsx")
 if not os.path.exists(data_file_path):
     data_file_path = os.path.join(APP_DIR, "data.csv")
@@ -53,7 +53,7 @@ def load_staff_data():
         return []
 
 # ---------------------------------------------------------
-# 2. ADMIN SIDEBAR (Data Upload)
+# 2. ADMIN SIDEBAR
 # ---------------------------------------------------------
 with st.sidebar:
     st.markdown("### 🔒 PXT Admin")
@@ -90,7 +90,7 @@ html, body, [data-testid="stAppViewContainer"] {background: #000000; overflow: h
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 4. FULL VOICE KIOSK INTERFACE WITH VIDEO & THEME SWITCHER
+# 4. HANDS-FREE WAKE-WORD VOICE KIOSK INTERFACE
 # ---------------------------------------------------------
 staff_data = load_staff_data()
 staff_json = json.dumps(staff_data, ensure_ascii=False)
@@ -105,7 +105,7 @@ kiosk_html_code = f"""
         * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, sans-serif; }}
         body, html {{ width: 100%; height: 100%; overflow: hidden; background: #05070c; }}
         
-        /* Fullscreen Video Background */
+        /* Video Background */
         #bgVideo {{
             position: fixed;
             right: 0;
@@ -117,10 +117,8 @@ kiosk_html_code = f"""
             z-index: 1;
             object-fit: cover;
             filter: brightness(0.4) contrast(1.1);
-            transition: opacity 0.5s ease-in-out;
         }}
 
-        /* Overlay UI Content */
         .kiosk-overlay {{
             position: fixed;
             top: 0;
@@ -135,7 +133,7 @@ kiosk_html_code = f"""
             background: rgba(5, 7, 12, 0.35);
         }}
 
-        /* Top-Right Theme Switcher (3 Dots) */
+        /* Theme Switcher Dots */
         .theme-switcher {{
             position: fixed;
             top: 25px;
@@ -166,9 +164,9 @@ kiosk_html_code = f"""
         .dot-theme2 {{ background: #10b981; }}
         .dot-theme3 {{ background: #f59e0b; }}
 
-        /* Main Glassmorphism Kiosk Card */
+        /* Glassmorphism Main Card */
         .card {{
-            background: rgba(15, 23, 42, 0.75);
+            background: rgba(15, 23, 42, 0.78);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.12);
@@ -181,47 +179,53 @@ kiosk_html_code = f"""
         }}
 
         h1 {{ font-size: 2.4rem; margin-bottom: 8px; color: #ffffff; letter-spacing: 0.5px; }}
-        p.subtitle {{ color: #cbd5e1; margin-bottom: 30px; font-size: 1.05rem; }}
+        p.subtitle {{ color: #cbd5e1; margin-bottom: 25px; font-size: 1.1rem; }}
 
-        /* Voice Mic Button */
-        .mic-btn {{
+        /* Animated Active Mic Indicator (No clicking needed) */
+        .mic-indicator {{
             background: linear-gradient(135deg, #0284c7, #2563eb);
             border: none;
-            width: 105px;
-            height: 105px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
             color: white;
             font-size: 2.8rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
+            margin: 0 auto 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             box-shadow: 0 0 25px rgba(2, 132, 199, 0.5);
-            margin-bottom: 20px;
-            outline: none;
+            animation: pulse-blue 2s infinite;
         }}
 
-        .mic-btn:hover {{ transform: scale(1.06); }}
-        .mic-btn.listening {{
-            background: linear-gradient(135deg, #dc2626, #ef4444);
-            animation: pulse 1.5s infinite;
+        .mic-indicator.active-speech {{
+            background: linear-gradient(135deg, #059669, #10b981);
+            animation: pulse-green 1s infinite;
         }}
 
-        @keyframes pulse {{
-            0% {{ box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }}
-            70% {{ box-shadow: 0 0 0 22px rgba(239, 68, 68, 0); }}
-            100% {{ box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }}
+        @keyframes pulse-blue {{
+            0% {{ box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.6); }}
+            70% {{ box-shadow: 0 0 0 20px rgba(2, 132, 199, 0); }}
+            100% {{ box-shadow: 0 0 0 0 rgba(2, 132, 199, 0); }}
         }}
 
-        .status {{ font-size: 1.15rem; color: #38bdf8; min-height: 28px; margin-bottom: 15px; font-weight: 500; }}
+        @keyframes pulse-green {{
+            0% {{ box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.8); }}
+            70% {{ box-shadow: 0 0 0 22px rgba(16, 185, 129, 0); }}
+            100% {{ box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }}
+        }}
 
-        /* Result Panel */
+        .status {{ font-size: 1.25rem; color: #38bdf8; min-height: 32px; margin-bottom: 15px; font-weight: 600; }}
+
+        /* Employee Shift Result Box */
         .result-box {{
-            background: rgba(30, 41, 59, 0.85);
+            background: rgba(30, 41, 59, 0.9);
             border-radius: 16px;
             padding: 22px;
             text-align: left;
-            margin-top: 20px;
+            margin-top: 15px;
             display: none;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
         }}
 
         .result-item {{
@@ -235,28 +239,28 @@ kiosk_html_code = f"""
         .highlight {{ color: #fbbf24; font-weight: 600; float: right; }}
     </style>
 </head>
-<body>
+<body onclick="initAudioEngine()">
 
     <!-- Video Background -->
     <video autoplay muted loop id="bgVideo">
         <source src="banner.mp4" type="video/mp4">
     </video>
 
-    <!-- Top-Right Theme Dots -->
+    <!-- Theme Dots -->
     <div class="theme-switcher">
         <div class="theme-dot dot-theme1 active" title="Theme 1 (banner.mp4)" onclick="switchTheme('banner.mp4', this)"></div>
         <div class="theme-dot dot-theme2" title="Theme 2 (banner2.mp4)" onclick="switchTheme('banner2.mp4', this)"></div>
         <div class="theme-dot dot-theme3" title="Theme 3 (banner3.mp4)" onclick="switchTheme('banner3.mp4', this)"></div>
     </div>
 
-    <!-- Kiosk Content -->
+    <!-- Kiosk Interface -->
     <div class="kiosk-overlay">
         <div class="card">
-            <h1>🎙️ PXT Hub</h1>
-            <p class="subtitle">Tap microphone or say <b>"Hi PXT"</b> to check your details.</p>
+            <h1>🎙️ PXT Kiosk</h1>
+            <p class="subtitle">Just say <b>"Hi PXT"</b> to wake up & check shift</p>
             
-            <button class="mic-btn" id="micBtn" onclick="toggleListening()">🎤</button>
-            <div class="status" id="statusText">Tap mic to speak</div>
+            <div class="mic-indicator" id="micIcon">🎤</div>
+            <div class="status" id="statusText">Listening for "Hi PXT"...</div>
 
             <div class="result-box" id="resultBox">
                 <div class="result-item">👤 Name: <span class="highlight" id="resName">-</span></div>
@@ -271,70 +275,83 @@ kiosk_html_code = f"""
 <script>
     const staffData = {staff_json};
     let recognition;
-    let isListening = false;
+    let autoResetTimer = null;
+    let isAwake = false;
 
-    // Theme Switcher
+    // Theme Switcher Logic
     function switchTheme(videoSrc, dotElem) {{
         const video = document.getElementById('bgVideo');
         video.src = videoSrc;
         video.play();
-        
         document.querySelectorAll('.theme-dot').forEach(d => d.classList.remove('active'));
         dotElem.classList.add('active');
     }}
 
-    // Speech Recognition
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {{
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
-
-        recognition.onresult = function(event) {{
-            const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
-            document.getElementById('statusText').innerText = 'Heard: "' + transcript + '"';
-            processVoiceCommand(transcript);
-        }};
-
-        recognition.onerror = function(event) {{
-            document.getElementById('statusText').innerText = 'Microphone Error. Tap to Retry.';
-            stopListening();
-        }};
-    }} else {{
-        document.getElementById('statusText').innerText = 'Voice search not supported in this browser.';
-    }}
-
-    function toggleListening() {{
-        if (isListening) {{
-            stopListening();
-        }} else {{
-            startListening();
+    function initAudioEngine() {{
+        if (!recognition) {{
+            startContinuousListening();
         }}
     }}
 
-    function startListening() {{
-        if (!recognition) return;
+    // Continuous Speech Recognition Engine
+    function startContinuousListening() {{
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {{
+            document.getElementById('statusText').innerText = 'Speech recognition not supported on this browser.';
+            return;
+        }}
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onstart = function() {{
+            document.getElementById('statusText').innerText = isAwake ? 'Listening for Name or ID...' : 'Listening for "Hi PXT"...';
+        }};
+
+        recognition.onresult = function(event) {{
+            let currentText = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {{
+                currentText += event.results[i][0].transcript;
+            }}
+            currentText = currentText.trim().toLowerCase();
+
+            if (currentText.length > 0) {{
+                document.getElementById('micIcon').classList.add('active-speech');
+            }}
+
+            // 1. Wake word detection: "hi pxt" or "pxt"
+            if (!isAwake && (currentText.includes('hi pxt') || currentText.includes('pxt') || currentText.includes('hi p') || currentText.includes('p x t'))) {{
+                isAwake = true;
+                document.getElementById('statusText').innerText = 'Awake! Say your Name or Badge ID...';
+                speakResponse("Hi! Please tell your name or badge ID.");
+                return;
+            }}
+
+            // 2. Search staff details if awake or direct command
+            processVoiceQuery(currentText);
+        }};
+
+        recognition.onerror = function(event) {{
+            console.log("Speech Engine Restarting...", event.error);
+            setTimeout(() => {{ try {{ recognition.start(); }} catch(e){{}} }}, 1000);
+        }};
+
+        recognition.onend = function() {{
+            // Always keep listening continuously for kiosk mode
+            setTimeout(() => {{ try {{ recognition.start(); }} catch(e){{}} }}, 500);
+        }};
+
         try {{
             recognition.start();
-            isListening = true;
-            document.getElementById('micBtn').classList.add('listening');
-            document.getElementById('statusText').innerText = 'Listening... Say your Name or Badge ID';
         }} catch(e) {{}}
     }}
 
-    function stopListening() {{
-        if (!recognition) return;
-        try {{
-            recognition.stop();
-            isListening = false;
-            document.getElementById('micBtn').classList.remove('listening');
-        }} catch(e) {{}}
-    }}
-
-    function processVoiceCommand(text) {{
+    function processVoiceQuery(text) {{
         let query = text.replace('hi pxt', '').replace('pxt', '').trim();
-        
+        if (query.length < 2) return;
+
         let found = staffData.find(emp => 
             (emp.id && query.includes(emp.id.toLowerCase())) ||
             (emp.name && query.includes(emp.name.toLowerCase())) ||
@@ -343,9 +360,13 @@ kiosk_html_code = f"""
 
         if (found) {{
             showEmployeeDetails(found);
-            speakResponse("Hello " + found.name + ". Your status is " + found.status + " and your next off is " + found.next_off);
-        }} else if (query.length > 2) {{
-            speakResponse("Sorry, I could not find employee details for " + query);
+            speakResponse("Hello " + found.name + ". Your shift status is " + found.status + " and your next off day is " + found.next_off);
+            
+            // Auto reset after 8 seconds
+            clearTimeout(autoResetTimer);
+            autoResetTimer = setTimeout(() => {{
+                resetKioskToSleep();
+            }}, 8000);
         }}
     }}
 
@@ -356,15 +377,29 @@ kiosk_html_code = f"""
         document.getElementById('resLeaves').innerText = emp.leaves || 'N/A';
         document.getElementById('resOff').innerText = emp.next_off || 'N/A';
         document.getElementById('resultBox').style.display = 'block';
+        document.getElementById('statusText').innerText = 'Showing details for ' + emp.name;
+    }}
+
+    function resetKioskToSleep() {{
+        isAwake = false;
+        document.getElementById('resultBox').style.display = 'none';
+        document.getElementById('statusText').innerText = 'Listening for "Hi PXT"...';
+        document.getElementById('micIcon').classList.remove('active-speech');
     }}
 
     function speakResponse(text) {{
         if ('speechSynthesis' in window) {{
+            window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 0.9;
+            utterance.rate = 0.95;
             window.speechSynthesis.speak(utterance);
         }}
     }}
+
+    // Auto-start on load
+    window.onload = function() {{
+        startContinuousListening();
+    }};
 </script>
 </body>
 </html>
