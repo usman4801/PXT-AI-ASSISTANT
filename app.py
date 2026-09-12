@@ -26,6 +26,7 @@ CHANGELOG (this revision):
 import base64
 import json
 import os
+import re
 
 import pandas as pd
 import streamlit as st
@@ -57,10 +58,57 @@ def resolve_data_file() -> str:
 DATA_FILE = resolve_data_file()
 
 
-def _first(row, *keys):
-    """Row (pandas Series) se pehla non-empty matching column value nikalta hai."""
+def _norm(s) -> str:
+    """Lowercase and strip everything except letters/digits, so 'Badge ID',
+    'BadgeID', 'badge_id' and 'Badge  ID' all compare equal."""
+    return re.sub(r"[^a-z0-9]", "", str(s).lower())
+
+
+def _colmap(df) -> dict:
+    """Map of normalized column name -> actual column name, for this dataframe."""
+    return {_norm(c): c for c in df.columns}
+
+
+def _pick_best_sheet(path: str):
+    """An uploaded workbook may have several tabs (pivot/summary tabs, a
+    'Roster' tab, termination-code lookups, etc.) - only one of which is
+    the actual staff list. Score each sheet by how many of the columns we
+    actually need it has, and use the best match instead of blindly
+    reading whichever sheet happens to be first."""
+    try:
+        xls = pd.ExcelFile(path, engine="openpyxl")
+    except Exception:
+        return None
+    signal_cols = ["badgeid", "employeeid", "employeename", "name", "shift", "department"]
+    best_name, best_score = None, -1
+    for name in xls.sheet_names:
+        try:
+            preview = xls.parse(name, dtype=str, nrows=5)
+        except Exception:
+            continue
+        cols_norm = {_norm(c) for c in preview.columns.astype(str)}
+        score = sum(1 for c in signal_cols if c in cols_norm)
+        if ("badgeid" in cols_norm or "employeeid" in cols_norm) and (
+            "employeename" in cols_norm or "name" in cols_norm
+        ):
+            score += 10  # strong signal this is the real staff sheet
+        if score > best_score:
+            best_score, best_name = score, name
+    if best_score > 0:
+        return best_name
+    return xls.sheet_names[0] if xls.sheet_names else None
+
+
+def _first(row, colmap: dict, *keys):
+    """Row (pandas Series) se pehla non-empty matching column value nikalta hai.
+    Matches column names loosely via colmap, so header wording/casing/spacing
+    differences (e.g. 'OFF1' vs 'Off Day 1', 'Pickup point' vs 'PickupPoint')
+    don't need to be listed as exact strings."""
     for k in keys:
-        v = row.get(k)
+        col = colmap.get(_norm(k))
+        if col is None:
+            continue
+        v = row.get(col)
         if v is not None and str(v).strip() and str(v).strip().lower() != "nan":
             return str(v).strip()
     return ""
@@ -70,7 +118,7 @@ def _first(row, *keys):
 # 1. STAFF DATA LOADER
 #    Field names match exactly what the kiosk JS below expects:
 #    id, name, shift, off1, off2, dept, manager, company, doj, phone,
-#    birthday, hours, shift_time, pickup, email, country, language,
+#    birthday, hours, shift_time, pickup, email, country, job_title,
 #    tenure_end, aliases (list)
 # ----------------------------------------------------------------------
 def load_staff_data() -> list:
@@ -80,18 +128,23 @@ def load_staff_data() -> list:
         if DATA_FILE.endswith(".csv"):
             df = pd.read_csv(DATA_FILE, dtype=str).fillna("")
         else:
-            df = pd.read_excel(DATA_FILE, dtype=str, engine="openpyxl").fillna("")
+            sheet = _pick_best_sheet(DATA_FILE)
+            df = pd.read_excel(
+                DATA_FILE, sheet_name=sheet, dtype=str, engine="openpyxl"
+            ).fillna("")
+
+        colmap = _colmap(df)
 
         records = []
         for _, row in df.iterrows():
-            badge = _first(row, "EmployeeID", "Badge ID", "BadgeID")
+            badge = _first(row, colmap, "EmployeeID", "Badge ID", "BadgeID")
             if not badge:
                 continue
 
-            off1 = _first(row, "OffDay1", "WeekOff1", "Off Day 1")
-            off2 = _first(row, "OffDay2", "WeekOff2", "Off Day 2")
+            off1 = _first(row, colmap, "OffDay1", "WeekOff1", "Off Day 1", "OFF1", "Off1")
+            off2 = _first(row, colmap, "OffDay2", "WeekOff2", "Off Day 2", "OFF2", "Off2")
             if not off1 and not off2:
-                combined = _first(row, "NextOffDay", "WeekOff", "Week Off")
+                combined = _first(row, colmap, "NextOffDay", "WeekOff", "Week Off")
                 if combined:
                     parts = [
                         p.strip()
@@ -101,29 +154,29 @@ def load_staff_data() -> list:
                     off1 = parts[0] if len(parts) > 0 else combined
                     off2 = parts[1] if len(parts) > 1 else ""
 
-            aliases_raw = _first(row, "Aliases", "Alias")
+            aliases_raw = _first(row, colmap, "Aliases", "Alias")
             aliases = [a.strip() for a in aliases_raw.split(",") if a.strip()]
 
             records.append(
                 {
                     "id": badge,
-                    "name": _first(row, "Name", "Employee Name"),
-                    "shift": _first(row, "Shift", "Status"),
+                    "name": _first(row, colmap, "Name", "Employee Name", "Full Name"),
+                    "shift": _first(row, colmap, "Shift", "Status"),
                     "off1": off1,
                     "off2": off2,
-                    "dept": _first(row, "Department", "Dept"),
-                    "manager": _first(row, "Manager"),
-                    "company": _first(row, "Company", "Agency"),
-                    "doj": _first(row, "DOJ", "JoiningDate", "Date of Joining"),
-                    "phone": _first(row, "Phone", "PhoneNumber", "Phone Number"),
-                    "birthday": _first(row, "Birthday", "BirthdayMonth", "Birthday Month"),
-                    "hours": _first(row, "WorkingHours", "Hours"),
-                    "shift_time": _first(row, "ShiftTiming", "ShiftTime", "Shift Timing"),
-                    "pickup": _first(row, "Pickup", "PickupPoint", "Pickup Point"),
-                    "email": _first(row, "Email"),
-                    "country": _first(row, "Country", "HomeCountry", "Home Country"),
-                    "language": _first(row, "Language"),
-                    "tenure_end": _first(row, "TenureEnd", "ContractEnd", "Tenure End"),
+                    "dept": _first(row, colmap, "Department", "Dept"),
+                    "manager": _first(row, colmap, "Manager", "Line Manager", "Supervisor"),
+                    "company": _first(row, colmap, "Company", "Agency", "3P"),
+                    "job_title": _first(row, colmap, "Job Title", "JobTitle", "Designation", "Position"),
+                    "doj": _first(row, colmap, "DOJ", "JoiningDate", "Date of Joining"),
+                    "phone": _first(row, colmap, "Phone", "PhoneNumber", "Phone Number"),
+                    "birthday": _first(row, colmap, "Birthday", "BirthdayMonth", "Birthday Month"),
+                    "hours": _first(row, colmap, "WorkingHours", "Hours", "Working Hours"),
+                    "shift_time": _first(row, colmap, "ShiftTiming", "ShiftTime", "Shift Timing"),
+                    "pickup": _first(row, colmap, "Pickup", "PickupPoint", "Pickup Point"),
+                    "email": _first(row, colmap, "Email", "Email Address"),
+                    "country": _first(row, colmap, "Country", "HomeCountry", "Home Country", "Home county"),
+                    "tenure_end": _first(row, colmap, "TenureEnd", "ContractEnd", "Tenure End", "Tenure end"),
                     "aliases": aliases,
                 }
             )
@@ -205,6 +258,8 @@ with st.sidebar:
 
             staff_preview = load_staff_data()
             st.caption(f"{len(staff_preview)} staff records loaded.")
+            if DATA_FILE.endswith(".xlsx"):
+                st.caption(f"Reading sheet: '{_pick_best_sheet(DATA_FILE)}'")
             if staff_preview:
                 st.dataframe(pd.DataFrame(staff_preview), use_container_width=True)
 
@@ -669,7 +724,33 @@ function handleLogin(badgeVal){
     });
 }
 
-/* Process queries once logged in */
+/* Turns a squished/concatenated string like "AbuDhabiCentralBusStation"
+   into readable words ("Abu Dhabi Central Bus Station") before it's
+   spoken - some data fields (pickup point especially) come in without
+   spaces between words. */
+function humanize(s){
+    if(!s) return s;
+    return s
+        .replace(/([a-z])([A-Z])/g,'$1 $2')   // camelCase -> spaced
+        .replace(/([A-Za-z])([0-9])/g,'$1 $2')
+        .replace(/([0-9])([A-Za-z])/g,'$1 $2')
+        .replace(/[_\-]+/g,' ')
+        .replace(/([,;&()])/g,' $1 ')
+        .replace(/\s+/g,' ')
+        .trim();
+}
+
+/* True if the normalized query contains ANY of the given phrases
+   (phrases can be multi-word - norm() already lowercases and strips
+   punctuation, so "what's my shift?" -> "whats my shift"). */
+function matchAny(n,phrases){
+    for(var i=0;i<phrases.length;i++){ if(n.indexOf(phrases[i])>=0) return true; }
+    return false;
+}
+
+/* Process queries once logged in. Employees rarely use the exact column
+   name, so each intent below lists many everyday ways of asking for the
+   same thing rather than just the field name itself. */
 function handleQuery(raw){
     resetSleepTimer();
     var n=norm(raw);
@@ -681,13 +762,21 @@ function handleQuery(raw){
     }
 
     // Logout / Bye
-    if(n.indexOf("bye")>=0 || n.indexOf("goodbye")>=0 || n.indexOf("exit")>=0 || n.indexOf("logout")>=0 || n.indexOf("done")>=0 || n.indexOf("thank")>=0){
+    if(matchAny(n,["bye","goodbye","exit","logout","log out","done","thank","that will be all","see you"])){
         speak("Goodbye "+userName+"! Have a great day ahead.",function(){goToSleep();});
         return;
     }
 
-    // Shift / Timing / Hours
-    if(n.indexOf("shift")>=0 || n.indexOf("timing")>=0 || n.indexOf("time")>=0 || n.indexOf("schedule")>=0 || n.indexOf("working hours")>=0 || n.indexOf("hours")>=0){
+    // Current date / clock time - checked early and narrowly so it
+    // doesn't get swallowed by the broader "shift" intent below.
+    if(matchAny(n,["what time is it","current time","what is the time","whats the time","clock","what day is it","what is the date","whats the date","todays date","today date"])){
+        var msg="Today is "+dateStr()+", current time is "+timeStr()+".";
+        speak(msg,function(){startListening();});
+        return;
+    }
+
+    // Shift / Timing / Hours / Roster
+    if(matchAny(n,["shift","timing","schedule","roster","working hours","how many hours","what time do i work","what time do i start","what time i start","when do i start","when does my shift start","when do i work","am i on day shift","am i on night shift","day shift or night","start work"])){
         var msg="Your shift is "+(s.shift||"not assigned");
         if(s.shift_time) msg+=", timing is "+s.shift_time;
         if(s.hours) msg+=", "+s.hours+" hours per day";
@@ -696,8 +785,8 @@ function handleQuery(raw){
         return;
     }
 
-    // Off days / Weekend / Holiday
-    if(n.indexOf("off")>=0 || n.indexOf("holiday")>=0 || n.indexOf("weekend")>=0 || n.indexOf("leave")>=0 || n.indexOf("rest")>=0){
+    // Off days / Weekend / Holiday / Leave
+    if(matchAny(n,["off day","off days","my off","week off","weekoff","holiday","weekend","day off","days off","rest day","when am i off","when do i rest","when is my off"])){
         var msg="Your off days are "+(s.off1||"not set");
         if(s.off2) msg+=" and "+s.off2;
         msg+=".";
@@ -705,57 +794,58 @@ function handleQuery(raw){
         return;
     }
 
-    // Department / Role
-    if(n.indexOf("dept")>=0 || n.indexOf("department")>=0 || n.indexOf("team")>=0 || n.indexOf("role")>=0){
+    // Job title / Position / Designation (checked before Department,
+    // since "role"/"position" usually means the employee's job, not team)
+    if(matchAny(n,["job title","my title","designation","my position","what is my role","what do i do here","what is my job","what job do i have"])){
+        var msg=s.job_title?"Your job title is "+s.job_title+".":"Your job title is not listed.";
+        speak(msg,function(){startListening();});
+        return;
+    }
+
+    // Department / Team
+    if(matchAny(n,["department","dept","my team","which team","which department","what section"])){
         var msg="You are in the "+(s.dept||"unassigned")+" department.";
         speak(msg,function(){startListening();});
         return;
     }
 
     // Manager / Supervisor
-    if(n.indexOf("manager")>=0 || n.indexOf("boss")>=0 || n.indexOf("supervisor")>=0 || n.indexOf("lead")>=0){
+    if(matchAny(n,["manager","boss","supervisor","team lead","report to","who do i report","reporting manager","line manager"])){
         var msg=s.manager?"Your manager is "+s.manager+".":"Your manager information is not listed.";
         speak(msg,function(){startListening();});
         return;
     }
 
-    // Pickup / Transport / Bus
-    if(n.indexOf("pickup")>=0 || n.indexOf("bus")>=0 || n.indexOf("transport")>=0 || n.indexOf("cab")>=0 || n.indexOf("location")>=0){
-        var msg=s.pickup?"Your pickup point is "+s.pickup+".":"Your pickup point is not specified.";
-        speak(msg,function(){startListening();});
-        return;
-    }
-
-    // Date / Time / Today
-    if(n.indexOf("date")>=0 || n.indexOf("day")>=0 || n.indexOf("today")>=0 || n.indexOf("clock")>=0){
-        var msg="Today is "+dateStr()+", current time is "+timeStr()+".";
+    // Pickup / Transport / Bus / Accommodation
+    if(matchAny(n,["pickup","pick up","bus","transport","cab","shuttle","ride","where do i get picked","where can i catch","where do we live","where do i live","which camp","my camp","accommodation","where do i stay","stay location","drop off","dropoff"])){
+        var msg=s.pickup?"Your pickup point is "+humanize(s.pickup)+".":"Your pickup point is not specified.";
         speak(msg,function(){startListening();});
         return;
     }
 
     // Phone / Contact
-    if(n.indexOf("phone")>=0 || n.indexOf("contact")>=0 || n.indexOf("number")>=0 || n.indexOf("mobile")>=0){
+    if(matchAny(n,["phone","contact number","my number","mobile","cell number","what is my number","whats my number"])){
         var msg=s.phone?"Your registered phone number is "+s.phone+".":"Your phone number is not listed.";
         speak(msg,function(){startListening();});
         return;
     }
 
     // Email
-    if(n.indexOf("email")>=0 || n.indexOf("mail")>=0){
+    if(matchAny(n,["email","mail address","my mail","e mail"])){
         var msg=s.email?"Your email is "+s.email+".":"Your email is not listed.";
         speak(msg,function(){startListening();});
         return;
     }
 
     // Birthday
-    if(n.indexOf("birthday")>=0 || n.indexOf("bday")>=0 || n.indexOf("born")>=0){
+    if(matchAny(n,["birthday","bday","born","birth month","date of birth"])){
         var msg=s.birthday?"Your birthday month is "+s.birthday+".":"Your birthday is not listed.";
         speak(msg,function(){startListening();});
         return;
     }
 
-    // Tenure / DOJ / Joining
-    if(n.indexOf("doj")>=0 || n.indexOf("joining")>=0 || n.indexOf("joined")>=0 || n.indexOf("tenure")>=0 || n.indexOf("contract")>=0){
+    // Tenure / DOJ / Joining / Contract
+    if(matchAny(n,["doj","joining date","date of joining","when did i join","how long have i worked","how long have i been here","tenure","contract end","when does my contract end","visa expiry","contract expiry"])){
         var msg="";
         if(s.doj) msg+="Your date of joining is "+s.doj+". ";
         if(s.tenure_end) msg+="Your contract ends on "+s.tenure_end+".";
@@ -764,21 +854,21 @@ function handleQuery(raw){
         return;
     }
 
-    // Company / Agency
-    if(n.indexOf("company")>=0 || n.indexOf("agency")>=0 || n.indexOf("employer")>=0){
+    // Company / Agency / Employer
+    if(matchAny(n,["company","agency","employer","who do i work for","which company","staffing agency"])){
         var msg=s.company?"You are registered under "+s.company+".":"Your company is not listed.";
         speak(msg,function(){startListening();});
         return;
     }
 
     // Help / Options
-    if(n.indexOf("help")>=0 || n.indexOf("what can you do")>=0 || n.indexOf("option")>=0 || n.indexOf("menu")>=0){
-        speak("You can ask me about your shift, off days, department, manager, pickup point, phone number, or date and time.",function(){startListening();});
+    if(matchAny(n,["help","what can you do","options","menu"])){
+        speak("You can ask me about your shift, off days, job title, department, manager, pickup point, phone number, email, or joining date.",function(){startListening();});
         return;
     }
 
     // Fallback: polite response
-    speak("I heard: "+raw+". You can ask me about your shift, off days, department, or manager.",function(){startListening();});
+    speak("I heard: "+raw+". You can ask me about your shift, off days, department, manager, or pickup point.",function(){startListening();});
 }
 
 /* ===== MAIN SPEECH RECOGNITION LOOP ===== */
