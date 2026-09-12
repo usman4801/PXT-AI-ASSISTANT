@@ -1,5 +1,5 @@
 """
-PXT Hub - Interactive Voice Kiosk (Wake Word: "Hi PXT")
+PXT Hub - Interactive Voice Kiosk
 Single-File Streamlit Application
 """
 import json
@@ -105,18 +105,16 @@ kiosk_html_code = f"""
         * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
         body, html {{ width: 100%; height: 100%; overflow: hidden; background: #030508; color: #ffffff; }}
         
-        /* Fixed Video Background Zoom Issue */
-        .video-container {{
+        /* Ambient Glow & Video Fallback Background */
+        .background-container {{
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
             z-index: 1;
+            background: radial-gradient(circle at 50% 30%, rgba(30, 58, 138, 0.35) 0%, rgba(3, 5, 8, 0.95) 75%);
             overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }}
         #bgVideo {{
             width: 100%;
@@ -137,7 +135,6 @@ kiosk_html_code = f"""
             flex-direction: column;
             justify-content: space-between;
             padding: 40px 60px;
-            background: radial-gradient(circle at center, rgba(5,7,15,0.2) 0%, rgba(3,5,8,0.7) 100%);
         }}
 
         /* Header Bar */
@@ -148,14 +145,14 @@ kiosk_html_code = f"""
             width: 100%;
         }}
         .greeting-container {{ display: flex; flex-direction: column; gap: 6px; }}
-        .greeting-title {{ font-size: 1.9rem; font-weight: 600; color: #ffffff; letter-spacing: -0.3px; }}
+        .greeting-title {{ font-size: 2.2rem; font-weight: 700; color: #ffffff; letter-spacing: -0.3px; }}
         .greeting-sub {{ font-size: 1.15rem; color: #94a3b8; font-weight: 400; }}
         
         .continue-btn {{
-            background: rgba(15, 23, 42, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 30px;
-            padding: 10px 22px;
+            padding: 12px 24px;
             color: #ffffff;
             font-size: 0.95rem;
             display: flex;
@@ -165,9 +162,9 @@ kiosk_html_code = f"""
             cursor: pointer;
             transition: all 0.3s ease;
         }}
-        .continue-btn:hover {{ background: rgba(255, 255, 255, 0.15); }}
+        .continue-btn:hover {{ background: rgba(255, 255, 255, 0.2); }}
 
-        /* Main Center Title */
+        /* Main Center Content */
         .center-content {{
             display: flex;
             flex-direction: column;
@@ -178,10 +175,10 @@ kiosk_html_code = f"""
             margin-bottom: auto;
         }}
         .main-title {{
-            font-size: 3.2rem;
+            font-size: 3.4rem;
             font-weight: 700;
             color: #ffffff;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             letter-spacing: -0.5px;
         }}
         .highlight-ai {{
@@ -191,35 +188,35 @@ kiosk_html_code = f"""
         }}
         .sub-instruction {{ font-size: 1.25rem; color: #94a3b8; margin-bottom: 35px; font-weight: 400; }}
 
-        /* Audio Microphone Indicator & Wave Animation */
+        /* Interactive Mic Button & Sound Wave Ring */
         .mic-wrapper {{
             position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
+            cursor: pointer;
         }}
         
         .mic-box {{
-            width: 72px;
-            height: 72px;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
-            background: linear-gradient(135deg, rgba(30,58,138,0.8), rgba(15,23,42,0.9));
-            border: 1.5px solid rgba(56, 189, 248, 0.4);
+            background: linear-gradient(135deg, #1e3a8a, #0f172a);
+            border: 2px solid rgba(56, 189, 248, 0.5);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.8rem;
+            font-size: 2rem;
             color: #38bdf8;
-            box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.3);
             transition: all 0.3s ease;
             z-index: 5;
         }}
 
-        /* Speech Wave Effect */
         .wave-ring {{
             position: absolute;
-            width: 72px;
-            height: 72px;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
             border: 2px solid rgba(56, 189, 248, 0.6);
             opacity: 0;
@@ -231,7 +228,7 @@ kiosk_html_code = f"""
             background: linear-gradient(135deg, #0284c7, #2563eb);
             color: #ffffff;
             border-color: #60a5fa;
-            box-shadow: 0 0 35px rgba(37, 99, 235, 0.6);
+            box-shadow: 0 0 40px rgba(37, 99, 235, 0.8);
         }}
 
         .active-speech .wave-ring {{
@@ -242,22 +239,22 @@ kiosk_html_code = f"""
 
         @keyframes ripple-wave {{
             0% {{ transform: scale(1); opacity: 0.8; border-color: #38bdf8; }}
-            100% {{ transform: scale(2.3); opacity: 0; border-color: #818cf8; }}
+            100% {{ transform: scale(2.4); opacity: 0; border-color: #818cf8; }}
         }}
 
         .status-text {{
-            font-size: 1.1rem;
+            font-size: 1.15rem;
             color: #38bdf8;
-            margin-top: 18px;
+            margin-top: 20px;
             font-weight: 500;
             min-height: 28px;
         }}
 
-        /* Staff Info Card */
+        /* Staff Result Panel */
         .result-box {{
-            background: rgba(15, 23, 42, 0.85);
+            background: rgba(15, 23, 42, 0.9);
             backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 20px;
             padding: 25px 35px;
             width: 100%;
@@ -265,7 +262,7 @@ kiosk_html_code = f"""
             margin-top: 25px;
             display: none;
             text-align: left;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
         }}
         .result-row {{ display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 1.05rem; color: #cbd5e1; }}
         .result-row:last-child {{ margin-bottom: 0; }}
@@ -280,14 +277,13 @@ kiosk_html_code = f"""
             color: #64748b;
             font-size: 0.9rem;
         }}
-        .footer-bar span {{ display: flex; align-items: center; gap: 6px; }}
     </style>
 </head>
-<body onclick="startContinuousListening()">
+<body onclick="enableAudioAndListen()">
 
-    <!-- Video Background Container -->
-    <div class="video-container">
-        <video autoplay muted loop id="bgVideo">
+    <!-- Ambient / Video Container -->
+    <div class="background-container">
+        <video autoplay muted loop id="bgVideo" onerror="this.style.display='none'">
             <source src="banner.mp4" type="video/mp4">
         </video>
     </div>
@@ -297,7 +293,7 @@ kiosk_html_code = f"""
         <!-- Top Bar -->
         <div class="header-bar">
             <div class="greeting-container">
-                <div class="greeting-title" id="greetingTitle">Good Afternoon 👋</div>
+                <div class="greeting-title" id="greetingTitle">Good Evening 👋</div>
                 <div class="greeting-sub">How can I help you today?</div>
             </div>
             <div class="continue-btn">
@@ -310,14 +306,14 @@ kiosk_html_code = f"""
             <h1 class="main-title">I'm Your PXT <span class="highlight-ai">AI</span> Assistant</h1>
             <p class="sub-instruction">You can ask me anything or give a command.</p>
 
-            <div class="mic-wrapper" id="micWrapper">
+            <div class="mic-wrapper" id="micWrapper" onclick="toggleListening(event)">
                 <div class="wave-ring"></div>
                 <div class="wave-ring"></div>
                 <div class="wave-ring"></div>
                 <div class="mic-box" id="micIcon">🎙️</div>
             </div>
             
-            <div class="status-text" id="statusText">Listening for "Hi PXT"...</div>
+            <div class="status-text" id="statusText">Click anywhere or tap mic to activate voice...</div>
 
             <!-- Details Display Panel -->
             <div class="result-box" id="resultBox">
@@ -340,9 +336,8 @@ kiosk_html_code = f"""
     const staffData = {staff_json};
     let recognition;
     let autoResetTimer = null;
-    let isAwake = false;
+    let isListening = false;
 
-    // Set Dynamic Time Greeting (Morning / Afternoon / Evening)
     function setDynamicGreeting() {{
         const hour = new Date().getHours();
         let greeting = "Good Morning 👋";
@@ -354,11 +349,24 @@ kiosk_html_code = f"""
         document.getElementById('greetingTitle').innerText = greeting;
     }}
 
-    function startContinuousListening() {{
-        if (recognition) return;
+    function enableAudioAndListen() {{
+        if (!isListening) {{
+            startListening();
+        }}
+    }}
 
+    function toggleListening(e) {{
+        if (e) e.stopPropagation();
+        if (isListening) {{
+            stopListening();
+        }} else {{
+            startListening();
+        }}
+    }}
+
+    function startListening() {{
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {{
-            document.getElementById('statusText').innerText = 'Speech recognition not supported on browser.';
+            document.getElementById('statusText').innerText = 'Browser voice recognition not supported.';
             return;
         }}
 
@@ -369,7 +377,9 @@ kiosk_html_code = f"""
         recognition.lang = 'en-US';
 
         recognition.onstart = function() {{
-            document.getElementById('statusText').innerText = isAwake ? 'Listening for Name or Badge ID...' : 'Listening for "Hi PXT"...';
+            isListening = true;
+            document.getElementById('micWrapper').classList.add('active-speech');
+            document.getElementById('statusText').innerText = 'Listening... Speak Badge ID or Name';
         }};
 
         recognition.onresult = function(event) {{
@@ -380,35 +390,33 @@ kiosk_html_code = f"""
             currentText = currentText.trim().toLowerCase();
 
             if (currentText.length > 0) {{
-                document.getElementById('micWrapper').classList.add('active-speech');
+                document.getElementById('statusText').innerText = '"' + currentText + '"';
+                processQuery(currentText);
             }}
-
-            // 1. Wake word check
-            if (!isAwake && (currentText.includes('hi pxt') || currentText.includes('pxt') || currentText.includes('hi p'))) {{
-                isAwake = true;
-                document.getElementById('statusText').innerText = 'Awake! State your Name or Badge ID...';
-                speakResponse("Hi! Please tell your name or badge ID.");
-                return;
-            }}
-
-            // 2. Search query matching
-            processQuery(currentText);
         }};
 
         recognition.onerror = function() {{
-            setTimeout(() => {{ try {{ recognition.start(); }} catch(e){{}} }}, 1000);
+            document.getElementById('statusText').innerText = 'Mic error. Retrying...';
         }};
 
         recognition.onend = function() {{
-            document.getElementById('micWrapper').classList.remove('active-speech');
-            setTimeout(() => {{ try {{ recognition.start(); }} catch(e){{}} }}, 500);
+            if (isListening) {{
+                try {{ recognition.start(); }} catch(e) {{}}
+            }}
         }};
 
         try {{ recognition.start(); }} catch(e) {{}}
     }}
 
+    function stopListening() {{
+        isListening = false;
+        if (recognition) recognition.stop();
+        document.getElementById('micWrapper').classList.remove('active-speech');
+        document.getElementById('statusText').innerText = 'Microphone paused. Tap mic to start.';
+    }}
+
     function processQuery(text) {{
-        let query = text.replace('hi pxt', '').replace('pxt', '').trim();
+        let query = text.toLowerCase().trim();
         if (query.length < 2) return;
 
         let found = staffData.find(emp => 
@@ -419,7 +427,7 @@ kiosk_html_code = f"""
 
         if (found) {{
             showDetails(found);
-            speakResponse("Hello " + found.name + ". Your shift status is " + found.status + " and your next off day is " + found.next_off);
+            speakResponse("Hello " + found.name + ". Your status is " + found.status + " and your next off day is " + found.next_off);
             
             clearTimeout(autoResetTimer);
             autoResetTimer = setTimeout(() => {{
@@ -434,14 +442,11 @@ kiosk_html_code = f"""
         document.getElementById('resStatus').innerText = emp.status || 'N/A';
         document.getElementById('resOff').innerText = emp.next_off || 'N/A';
         document.getElementById('resultBox').style.display = 'block';
-        document.getElementById('statusText').innerText = 'Showing details for ' + emp.name;
     }}
 
     function resetKiosk() {{
-        isAwake = false;
         document.getElementById('resultBox').style.display = 'none';
-        document.getElementById('statusText').innerText = 'Listening for "Hi PXT"...';
-        document.getElementById('micWrapper').classList.remove('active-speech');
+        document.getElementById('statusText').innerText = 'Listening... Speak Badge ID or Name';
     }}
 
     function speakResponse(text) {{
@@ -455,7 +460,6 @@ kiosk_html_code = f"""
 
     window.onload = function() {{
         setDynamicGreeting();
-        startContinuousListening();
     }};
 </script>
 </body>
