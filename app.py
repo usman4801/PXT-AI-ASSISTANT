@@ -229,6 +229,18 @@ st.markdown(
     [data-testid="stToolbar"], [data-testid="stStatusWidget"], [data-testid="stDecoration"] {display:none !important;}
     div.block-container {padding: 0 !important; margin: 0 !important; max-width: 100% !important;}
     html, body, [data-testid="stAppViewContainer"] {background: #090d16; overflow: hidden;}
+    /* Force the kiosk's iframe (and the banner video inside it) to fill
+       the entire browser viewport on any screen/tablet size, instead of
+       being boxed into the fixed pixel height Streamlit gives components.html.
+       This is what actually made the banner look "not fit on screen". */
+    iframe {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        border: none !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -255,7 +267,7 @@ KIOSK_TEMPLATE = r"""<!DOCTYPE html>
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;color:#eaf6ff;}
 .kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
-.bg-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;z-index:0;opacity:.85;}
+.bg-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center;z-index:0;opacity:.85;}
 .bg-grad{position:absolute;inset:0;z-index:0;
     background:radial-gradient(circle at 20% 30%,rgba(0,180,255,.15),transparent 45%),
                radial-gradient(circle at 80% 70%,rgba(0,255,200,.12),transparent 45%),
@@ -274,7 +286,6 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 .mic-label{font-size:10px;color:#7fd0ef;letter-spacing:1px;text-transform:uppercase;}
 .debug{color:#5fa8c4;font-size:10.5px;background:rgba(10,16,26,.5);padding:4px 12px;border-radius:999px;border:1px solid rgba(80,200,255,.15);max-width:50vw;text-align:center;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
-.brand{position:relative;z-index:2;color:#e8f6ff;letter-spacing:8px;font-size:20px;font-weight:700;opacity:.8;text-transform:uppercase;margin-bottom:16px;}
 .pulse-ring{position:relative;z-index:2;width:110px;height:110px;border-radius:50%;border:2px solid rgba(0,190,255,.25);display:flex;align-items:center;justify-content:center;margin-bottom:24px;}
 .pulse-ring.active{animation:pulse 2s ease-in-out infinite;}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,190,255,.3)}50%{box-shadow:0 0 0 22px rgba(0,190,255,0)}}
@@ -351,7 +362,6 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
         <div class="debug" id="debug">&nbsp;</div>
         <div class="theme-dots" id="themeDots"></div>
     </div>
-    <div class="brand">PXT&nbsp;HUB</div>
     <div class="pulse-ring" id="pulseRing"><div class="icon">🎙️</div></div>
     <!-- Badge ID input for manual entry (RFID later) -->
     <div id="badgeWrap" style="position:relative;z-index:2;display:none;margin-bottom:16px;">
@@ -430,31 +440,6 @@ var userName=null,userStaff=null,sleepTimer=null,chosenVoice=null,wakeTimeoutTim
 var state='sleep'; // sleep | wake_listen | ready
 var SLEEP_TIMEOUT=30000; // inactivity timeout once logged in (ready state)
 var WAKE_TIMEOUT=25000;  // seconds allowed to enter a badge before going back to sleep
-var userLang='en'; // current session language: 'en' or native code
-var userNativeName=''; // e.g. 'Malayalam', 'Hindi'
-
-/* ===== LANGUAGE SUPPORT REMOVED =====
-   This kiosk now runs English-only. extractNativeLang() is kept as a
-   no-op (always returns null) so downstream code (handleLogin's
-   nativeLang check, etc.) continues to work unchanged and always takes
-   the English path, without touching that logic. */
-function extractNativeLang(langStr){
-    return null;
-}
-
-/* ===== TRANSLATIONS REMOVED =====
-   English-only build: tr() is kept as a no-op (always null) so every
-   call site like  tr('your_shift') ? tr('your_shift') : 'your shift is'
-   automatically falls through to its English default text, unchanged. */
-function tr(key){
-    return null;
-}
-
-function trGreet(){
-    var h=new Date().getHours();
-    var key=h<12?'greet_morning':h<17?'greet_afternoon':'greet_evening';
-    return tr(key)||timeGreet();
-}
 
 /* ===== VOICE ===== */
 var VP=['Google UK English Female','Google US English','Microsoft Zira','Microsoft Jenny','Samantha','Karen','Microsoft David'];
@@ -515,34 +500,16 @@ micSelect.onchange=function(){selectedDeviceId=micSelect.value;if(selectedDevice
 /* ===== TTS =====
    IMPORTANT LIMITATION: this kiosk uses the browser's built-in Web Speech
    API (window.speechSynthesis) - there is no server/API integration here,
-   so voice quality and which languages even have a voice at all depend
-   entirely on what's installed on the machine/OS running the kiosk.
-   A true "high-quality neural TTS with correct regional phonemes" (Azure
-   Speech, Google Cloud TTS, ElevenLabs, etc.) would need a backend call
-   with an API key and audio playback - that's a real architecture change,
-   not a prompt/config tweak, and isn't something this static HTML file
-   can add on its own. What IS fixed here: more robust matching so we
-   actually find and use a native voice when the OS has one installed,
-   instead of silently falling back to a mismatched/default voice. */
-function normTag(s){return (s||'').toLowerCase().replace('_','-');}
-function speak(text,cb,forceLang){
+   so voice quality depends entirely on what's installed on the machine/OS
+   running the kiosk. English-only build - always uses the chosen English
+   voice. */
+function speak(text,cb){
     speaking=true;stopListening();clearTimeout(sleepTimer);
     try{window.speechSynthesis.cancel();}catch(e){}
     setStatus(text,"");
     var u=new SpeechSynthesisUtterance(text);
-    var lang=forceLang||(userLang==='en'?'en-US':userLang);
-    u.lang=lang;u.rate=0.95;u.pitch=1.05;
-    // Use chosen voice for English, auto-select for native
-    if(lang==='en-US'&&chosenVoice){u.voice=chosenVoice;}
-    else if(lang!=='en-US'){
-        var voices=window.speechSynthesis.getVoices();
-        var target=normTag(lang),base=target.split('-')[0];
-        // exact tag match first, then base-language match (case/underscore tolerant)
-        var nv=voices.find(function(v){return normTag(v.lang)===target;})
-            ||voices.find(function(v){return normTag(v.lang).indexOf(base+'-')===0||normTag(v.lang)===base;});
-        if(nv){u.voice=nv;}
-        else{log('No native voice installed for '+lang+' - using device default');}
-    }
+    u.lang='en-US';u.rate=0.95;u.pitch=1.05;
+    if(chosenVoice){u.voice=chosenVoice;}
     var done=false;function fin(){if(done)return;done=true;speaking=false;if(cb)cb();}
     u.onend=fin;u.onerror=fin;window.speechSynthesis.speak(u);
     setTimeout(fin,Math.max(text.length*100,3000)+5000);
@@ -576,20 +543,8 @@ function handleBadgeEntry(val){
 
 function timeGreet(){var h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";}
 function timeStr(){return new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});}
-// Date/day/month names now follow the active session language instead of
-// always rendering in English (previously hardcoded to 'en-US' regardless
-// of userLang - a real source of the "replies back in English" complaint).
-function activeLocale(){
-    if(userLang==='en'||userLang==='en-US') return 'en-US';
-    // Base language subtag works for Intl even without a country match
-    try{ new Intl.DateTimeFormat(userLang); return userLang; }catch(e){ return 'en-US'; }
-}
 function dateStr(){
-    try{
-        return new Date().toLocaleDateString(activeLocale(),{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    }catch(e){
-        return new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    }
+    return new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
 }
 
 /* ===== WAKE WORD - ultra broad ===== */
@@ -604,7 +559,7 @@ function isWake(raw){
 
 /* ===== STATE MANAGEMENT ===== */
 function goToSleep(){
-    state='sleep';userName=null;userStaff=null;userLang='en';userNativeName='';
+    state='sleep';userName=null;userStaff=null;
     clearTimeout(sleepTimer);clearTimeout(wakeTimeoutTimer);
     hideCard();
     var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
@@ -704,13 +659,9 @@ function handleLogin(badgeVal){
     userName=found.name;
     state='ready';
 
-    /* Multi-language support disabled - session language stays 'en'. */
-    userLang='en';
-    userNativeName='';
-
     log("Logged in as: "+userName+" ("+found.id+")");
     showCard(found);
-    var greeting = trGreet() + ", " + userName + "! How can I help you today?";
+    var greeting = timeGreet() + ", " + userName + "! How can I help you today?";
     setPill("Logged in: "+userName+" ("+found.id+")");
     speak(greeting,function(){
         resetSleepTimer();
@@ -838,10 +789,7 @@ function startListening(){
     rec=new SR();
     rec.continuous=false;
     rec.interimResults=false;
-    // Wake word detection always stays in en-US. Once logged in, recognition
-    // switches to the employee's language (userLang) so non-English voice
-    // queries are properly understood by the Web Speech API.
-    rec.lang=(state==='ready'&&userLang&&userLang!=='en')?userLang:'en-US';
+    rec.lang='en-US';
 
     rec.onstart=function(){listening=true;setMic(true);log("Listening ("+state+", "+rec.lang+")...");};
 
