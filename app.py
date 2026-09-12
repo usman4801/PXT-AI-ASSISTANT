@@ -1,6 +1,6 @@
 """
 PXT Hub - Amazon Canopy & Tablet Ready Voice Kiosk (English Only)
-Single-file Streamlit App - Fullscreen Video & Fixed Mic JS Initialization
+Single-file Streamlit App
 """
 import base64
 import json
@@ -197,7 +197,7 @@ st.markdown(
 )
 
 # ----------------------------------------------------------------------
-# 4. SINGLE-FILE KIOSK HTML/JS/VOICE COMPONENT
+# 4. KIOSK COMPONENT
 # ----------------------------------------------------------------------
 staff_data = load_staff_data()
 staff_json = json.dumps(staff_data, ensure_ascii=False)
@@ -214,7 +214,6 @@ KIOSK_TEMPLATE = r"""<!DOCTYPE html>
 html,body{width:100vw;height:100vh;background:#05070c;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;color:#eaf6ff;}
 .kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
 
-/* SCREEN FIT BACKGROUND VIDEO */
 .bg-video{position:absolute;top:0;left:0;width:100vw;height:100vh;object-fit:cover;object-position:center;z-index:0;opacity:.85;}
 .bg-grad{position:absolute;inset:0;z-index:0;
     background:radial-gradient(circle at 20% 30%,rgba(0,180,255,.15),transparent 45%),
@@ -257,7 +256,6 @@ html,body{width:100vw;height:100vh;background:#05070c;font-family:'Segoe UI',Ari
 .pill{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:4;padding:8px 22px;border-radius:999px;background:rgba(10,16,26,.6);border:1px solid rgba(80,200,255,.2);backdrop-filter:blur(10px);text-align:center;max-width:90vw;}
 .pill .p1{color:rgba(223,245,255,.7);font-size:11px;font-weight:500;letter-spacing:.4px;}
 
-/* OVERLAY UI */
 .start-overlay{position:fixed;inset:0;z-index:100;background:rgba(5,7,12,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;backdrop-filter:blur(6px);}
 .start-overlay h2{color:#eaf6ff;font-size:24px;font-weight:700;}
 .start-overlay p{color:#8fb8cf;font-size:14px;max-width:400px;text-align:center;line-height:1.6;}
@@ -314,6 +312,7 @@ html,body{width:100vw;height:100vh;background:#05070c;font-family:'Segoe UI',Ari
     </div>
     <div class="brand">PXT&nbsp;HUB</div>
     <div class="pulse-ring" id="pulseRing"><div class="icon">🎙️</div></div>
+    
     <div id="badgeWrap" style="position:relative;z-index:2;display:none;margin-bottom:16px;">
         <div style="display:flex;align-items:center;gap:8px;">
             <input type="text" id="badgeInput" placeholder="Enter Badge ID" autocomplete="off" inputmode="numeric" pattern="[0-9]*"
@@ -322,10 +321,12 @@ html,body{width:100vw;height:100vh;background:#05070c;font-family:'Segoe UI',Ari
         </div>
         <div style="color:rgba(127,208,239,.6);font-size:10px;margin-top:6px;text-align:center;">Or say your Badge ID number</div>
     </div>
+
     <div class="status-display">
-        <div class="status-main" id="statusMain"></div>
-        <div class="status-sub" id="statusSub"></div>
+        <div class="status-main" id="statusMain">Say "PXT" to start</div>
+        <div class="status-sub" id="statusSub">Listening for wake word...</div>
     </div>
+
     <div class="rcard" id="rcard">
         <div class="rn" id="rn"></div><div class="ri" id="ri"></div>
         <div class="rg">
@@ -334,7 +335,7 @@ html,body{width:100vw;height:100vh;background:#05070c;font-family:'Segoe UI',Ari
             <div class="ri-item"><div class="lbl" id="rl3">Department</div><div class="val" id="rv3"></div></div>
         </div>
     </div>
-    <div class="pill"><div class="p1" id="p1">PXT Hub</div></div>
+    <div class="pill"><div class="p1" id="p1">PXT Hub Voice Assistant</div></div>
 </div>
 
 <script>
@@ -344,7 +345,7 @@ var THEMES=__THEMES__;
 var $=function(id){return document.getElementById(id);};
 var micDot=$('micDot'),micLabel=$('micLabel'),debug=$('debug');
 var statusMain=$('statusMain'),statusSub=$('statusSub');
-var pulseRing=$('pulseRing'),p1=$('p1');
+var pulseRing=$('pulseRing'),p1=$('p1'),badgeWrap=$('badgeWrap');
 var bgVideo=$('bgVideo'),bgGrad=$('bgGrad');
 var rcard=$('rcard'),rn=$('rn'),ri=$('ri'),rv1=$('rv1'),rv2=$('rv2'),rv3=$('rv3'),rl1=$('rl1'),rl2=$('rl2'),rl3=$('rl3');
 var micSelect=$('micSelect'),testFill=$('testFill'),testLabel=$('testLabel'),startBtn=$('startBtn');
@@ -379,8 +380,10 @@ function switchTheme(i){
 }
 
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-
+var speaking=false,listening=false,rec=null,shouldRun=true;
 var micStream=null,selectedDeviceId=null,testStream=null,testMeter=null,chosenVoice=null;
+var userName=null,userStaff=null,wakeTimeoutTimer=null,sleepTimer=null;
+var state='sleep'; // 'sleep', 'badge', 'query'
 
 var VP=['Google UK English Female','Google US English','Microsoft Zira','Microsoft Jenny','Samantha','Karen','Microsoft David'];
 function loadVoices(){
@@ -398,6 +401,143 @@ function loadVoices(){
 window.speechSynthesis.onvoiceschanged=loadVoices;
 voiceSelect.onchange=function(){var v=window.speechSynthesis.getVoices();chosenVoice=v.find(function(x){return x.name===voiceSelect.value;})||null;};
 voicePreview.onclick=function(){try{window.speechSynthesis.cancel();}catch(e){}var u=new SpeechSynthesisUtterance("Hello! I am your PXT Hub assistant.");u.rate=0.95;u.pitch=1.05;if(chosenVoice)u.voice=chosenVoice;window.speechSynthesis.speak(u);};
+
+function norm(s){return(s||"").toLowerCase().replace(/[^a-z0-9\s]/g,"").replace(/\s+/g," ").trim();}
+function setMic(on){micDot.classList.toggle('on',on);micLabel.textContent=on?'LISTENING':'MIC OFF';pulseRing.classList.toggle('active',on);}
+function setStatus(m,s){statusMain.textContent=m||'';statusSub.textContent=s||'';}
+function hideCard(){rcard.classList.remove('show');}
+function showCard(s){
+    rn.textContent=s.name;ri.textContent='Badge: '+s.id;
+    rl1.textContent='Shift';rv1.textContent=s.shift||'—';rv1.className='val c-pres';
+    rl2.textContent='Off Days';rv2.textContent=(s.off1||'')+(s.off2?' & '+s.off2:'');
+    rl3.textContent='Department';rv3.textContent=s.dept||'—';
+    rcard.classList.add('show');
+}
+
+function speak(text, cb){
+    speaking=true;
+    try{window.speechSynthesis.cancel();}catch(e){}
+    var u=new SpeechSynthesisUtterance(text);
+    u.rate=0.95;u.pitch=1.05;
+    if(chosenVoice)u.voice=chosenVoice;
+    u.onend=function(){speaking=false;if(cb)cb();};
+    u.onerror=function(){speaking=false;if(cb)cb();};
+    window.speechSynthesis.speak(u);
+}
+
+function trGreet(){
+    var h=new Date().getHours();
+    return h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+}
+
+function isWake(raw){
+    var n=norm(raw);
+    return n.indexOf('pxt')>=0 || n.indexOf('bxt')>=0 || n.indexOf('txt')>=0 || n.indexOf('hey')>=0;
+}
+
+function extractBadge(raw){
+    var digits=raw.replace(/[^0-9]/g,'');
+    if(digits.length>=3) return digits;
+    return null;
+}
+
+function handleBadgeEntry(id){
+    var found=STAFF.find(function(s){return s.id===id;});
+    if(found){
+        userStaff=found;
+        userName=found.name;
+        state='query';
+        badgeWrap.style.display='none';
+        showCard(userStaff);
+        var msg=trGreet()+", "+userName+"! How can I help you today?";
+        setStatus("Hello "+userName, "Ask your question...");
+        speak(msg, function(){ resetWakeTimer(); });
+    } else {
+        setStatus("Badge ID not found", "Please try again...");
+        speak("Badge ID not found. Please try entering it again.", function(){});
+    }
+}
+
+function processQuery(text){
+    var n=norm(text);
+    resetWakeTimer();
+    
+    if(n.indexOf('shift')>=0){
+        var txt="Your shift is "+(userStaff.shift||'not set')+" and shift timing is "+(userStaff.shift_time||'normal')+".";
+        setStatus("Shift Info", txt);
+        speak(txt);
+    } else if(n.indexOf('off')>=0 || n.indexOf('holiday')>=0){
+        var txt="Your week off days are "+(userStaff.off1||'none')+" "+(userStaff.off2||'')+".";
+        setStatus("Off Days", txt);
+        speak(txt);
+    } else if(n.indexOf('manager')>=0){
+        var txt="Your manager is "+(userStaff.manager||'not listed')+".";
+        setStatus("Manager", txt);
+        speak(txt);
+    } else if(n.indexOf('bye')>=0 || n.indexOf('thank')>=0){
+        speak("You are welcome! Have a great day.", function(){ resetToSleep(); });
+    } else {
+        var txt="I am sorry, I didn't get that. You can ask about your shift, off days, or manager.";
+        setStatus("PXT Hub Voice", "Ask: shift, off days, or manager");
+        speak(txt);
+    }
+}
+
+function resetWakeTimer(){
+    clearTimeout(wakeTimeoutTimer);
+    wakeTimeoutTimer=setTimeout(function(){
+        resetToSleep();
+    }, 25000);
+}
+
+function resetToSleep(){
+    state='sleep';
+    userName=null;
+    userStaff=null;
+    badgeWrap.style.display='none';
+    hideCard();
+    setStatus('Say "PXT" to start', 'Listening for wake word...');
+    p1.textContent='PXT Hub Voice Assistant';
+}
+
+function initSR(){
+    if(!SR) return;
+    rec=new SR();
+    rec.continuous=true;
+    rec.interimResults=false;
+    rec.lang='en-US';
+
+    rec.onstart=function(){listening=true;setMic(true);};
+    rec.onend=function(){
+        listening=false;
+        setMic(false);
+        if(shouldRun) setTimeout(function(){ try{rec.start();}catch(e){} }, 400);
+    };
+
+    rec.onresult=function(e){
+        if(speaking) return;
+        var last=e.results[e.results.length-1];
+        if(!last.isFinal) return;
+        var text=last[0].transcript;
+        debug.textContent="Heard: "+text;
+
+        if(state==='sleep'){
+            if(isWake(text)){
+                state='badge';
+                badgeWrap.style.display='block';
+                setStatus("Welcome to PXT Hub", "Please say or enter your Badge ID");
+                speak("Welcome to PXT Hub! Please enter or speak your Badge ID.", function(){ resetWakeTimer(); });
+            }
+        } else if(state==='badge'){
+            var bid=extractBadge(text);
+            if(bid) handleBadgeEntry(bid);
+        } else if(state==='query'){
+            processQuery(text);
+        }
+    };
+
+    try{ rec.start(); }catch(e){}
+}
 
 async function loadMics(){
     try{
@@ -446,10 +586,15 @@ startBtn.onclick=function(){
     if(testMeter){testMeter.stop();}
     $('startOverlay').style.display='none';
     $('kiosk').style.display='flex';
-    if(THEMES&&THEMES.length>0){
-        switchTheme(0);
-    }
+    if(THEMES&&THEMES.length>0){ switchTheme(0); }
+    initSR();
 };
+
+document.addEventListener('DOMContentLoaded', function(){
+    var bi=$('badgeInput'), bb=$('badgeBtn');
+    if(bb) bb.onclick=function(){if(bi&&bi.value.trim().length>=3) handleBadgeEntry(bi.value.trim());};
+    if(bi) bi.onkeydown=function(e){if(e.key==='Enter'&&bi.value.trim().length>=3) handleBadgeEntry(bi.value.trim());};
+});
 
 /* ===== INITIAL EXECUTION ===== */
 loadMics();
