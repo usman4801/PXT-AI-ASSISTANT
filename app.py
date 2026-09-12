@@ -1,27 +1,6 @@
 """
 PXT Hub - Amazon Canopy & Tablet Ready Voice Kiosk (English Only)
-Single-file Streamlit App - No external HTML template file needed.
-
-This merges the working kiosk frontend (wake-word "Hi PXT", badge login,
-staff lookup, glassmorphism UI, mic/voice setup screen, sleep/wake cycle)
-directly into this one app.py. Multi-language support has been removed -
-the kiosk now always greets and responds in English.
-
-CHANGELOG (this revision):
-1) Login is now badge-number ONLY. The kiosk no longer guesses a name
-   from whatever it heard - if no valid badge is given, it politely
-   re-asks instead of logging someone in under a misheard name. A
-   20-25s "wake timeout" also puts the kiosk back to sleep if nobody
-   enters a badge in time. While waiting for a badge, "who are you" /
-   "what can you do" are answered directly without needing a login.
-2) Background theme video(s) are now embedded as base64 data URIs
-   instead of a plain relative <video src>. Streamlit's components.html
-   renders the kiosk inside a sandboxed iframe, so a relative filename
-   like "banner.mp4" never actually resolved to the file on disk - that
-   was why the banner video wasn't appearing. Data URIs always work.
-3) Any theme video file placed next to app.py (banner.mp4, banner2.mp4,
-   banner3.mp4, ...) is auto-detected and gets a small switch-dot in the
-   kiosk's top-right corner. Add more just by dropping the file in.
+Single-file Streamlit App - Fullscreen Video & Fixed Mic JS Initialization
 """
 import base64
 import json
@@ -35,7 +14,7 @@ import streamlit.components.v1 as components
 # 0. CONFIG
 # ----------------------------------------------------------------------
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-ADMIN_PASSWORD = "pxt123"  # NOTE: for production, move this to st.secrets
+ADMIN_PASSWORD = "pxt123"
 
 st.set_page_config(
     page_title="PXT Hub Kiosk",
@@ -46,7 +25,6 @@ st.set_page_config(
 
 
 def resolve_data_file() -> str:
-    """data.xlsx ko priority deta hai, warna data.csv dhoondta hai."""
     xlsx_path = os.path.join(APP_DIR, "data.xlsx")
     csv_path = os.path.join(APP_DIR, "data.csv")
     if os.path.exists(xlsx_path):
@@ -58,7 +36,6 @@ DATA_FILE = resolve_data_file()
 
 
 def _first(row, *keys):
-    """Row (pandas Series) se pehla non-empty matching column value nikalta hai."""
     for k in keys:
         v = row.get(k)
         if v is not None and str(v).strip() and str(v).strip().lower() != "nan":
@@ -68,10 +45,6 @@ def _first(row, *keys):
 
 # ----------------------------------------------------------------------
 # 1. STAFF DATA LOADER
-#    Field names match exactly what the kiosk JS below expects:
-#    id, name, shift, off1, off2, dept, manager, company, doj, phone,
-#    birthday, hours, shift_time, pickup, email, country, language,
-#    tenure_end, aliases (list)
 # ----------------------------------------------------------------------
 def load_staff_data() -> list:
     if not os.path.exists(DATA_FILE):
@@ -135,21 +108,9 @@ def load_staff_data() -> list:
 
 # ----------------------------------------------------------------------
 # 1b. BACKGROUND THEME VIDEOS
-#     Streamlit's components.html() renders the kiosk inside a sandboxed
-#     iframe, so a plain relative filename like "banner.mp4" does NOT
-#     resolve to the file sitting next to app.py - that was the reason
-#     the banner video wasn't showing at all. We read each theme file
-#     that exists next to app.py and inline it as a base64 data URI
-#     instead, which always works regardless of how Streamlit serves
-#     the app.
-#
-#     To add a theme: just drop a file with one of the names below next
-#     to app.py (banner.mp4 is the default/first theme). A small dot
-#     appears in the kiosk's top-right for every theme that loads
-#     successfully, letting staff switch between them live.
 # ----------------------------------------------------------------------
 THEME_FILENAMES = ["banner.mp4", "banner2.mp4", "banner3.mp4"]
-MAX_THEME_VIDEO_MB = 20  # safety cap so one huge video doesn't bloat the page
+MAX_THEME_VIDEO_MB = 20
 
 
 def _video_to_data_uri(path: str) -> str:
@@ -181,7 +142,7 @@ def load_themes() -> list:
 
 
 # ----------------------------------------------------------------------
-# 2. ADMIN SIDEBAR (password-protected data upload)
+# 2. ADMIN SIDEBAR
 # ----------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### PXT Admin")
@@ -220,7 +181,7 @@ with st.sidebar:
             st.error("Incorrect password")
 
 # ----------------------------------------------------------------------
-# 3. HIDE STREAMLIT CHROME & UI CLEANUP
+# 3. HIDE STREAMLIT CHROME
 # ----------------------------------------------------------------------
 st.markdown(
     """
@@ -228,7 +189,8 @@ st.markdown(
     #MainMenu, footer, header {display:none !important;}
     [data-testid="stToolbar"], [data-testid="stStatusWidget"], [data-testid="stDecoration"] {display:none !important;}
     div.block-container {padding: 0 !important; margin: 0 !important; max-width: 100% !important;}
-    html, body, [data-testid="stAppViewContainer"] {background: #090d16; overflow: hidden;}
+    html, body, [data-testid="stAppViewContainer"] {background: #090d16; overflow: hidden; height: 100vh;}
+    iframe {width: 100vw !important; height: 100vh !important; border: none !important;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -236,10 +198,6 @@ st.markdown(
 
 # ----------------------------------------------------------------------
 # 4. SINGLE-FILE KIOSK HTML/JS/VOICE COMPONENT
-#    The full kiosk frontend is embedded below as a raw string (not an
-#    f-string) to avoid having to escape the JS's own curly braces.
-#    __STAFF__ and __THEMES__ are simple text placeholders swapped out
-#    with .replace() right before rendering.
 # ----------------------------------------------------------------------
 staff_data = load_staff_data()
 staff_json = json.dumps(staff_data, ensure_ascii=False)
@@ -253,9 +211,11 @@ KIOSK_TEMPLATE = r"""<!DOCTYPE html>
 <meta charset="UTF-8"><title>PXT Hub</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;color:#eaf6ff;}
+html,body{width:100vw;height:100vh;background:#05070c;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;color:#eaf6ff;}
 .kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
-.bg-video{position:absolute;top:0;left:0;width:100vw;height:100vh;object-fit:cover;object-position:center center;z-index:0;opacity:.85;}
+
+/* SCREEN FIT BACKGROUND VIDEO */
+.bg-video{position:absolute;top:0;left:0;width:100vw;height:100vh;object-fit:cover;object-position:center;z-index:0;opacity:.85;}
 .bg-grad{position:absolute;inset:0;z-index:0;
     background:radial-gradient(circle at 20% 30%,rgba(0,180,255,.15),transparent 45%),
                radial-gradient(circle at 80% 70%,rgba(0,255,200,.12),transparent 45%),
@@ -297,7 +257,7 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 .pill{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:4;padding:8px 22px;border-radius:999px;background:rgba(10,16,26,.6);border:1px solid rgba(80,200,255,.2);backdrop-filter:blur(10px);text-align:center;max-width:90vw;}
 .pill .p1{color:rgba(223,245,255,.7);font-size:11px;font-weight:500;letter-spacing:.4px;}
 
-/* Start overlay */
+/* OVERLAY UI */
 .start-overlay{position:fixed;inset:0;z-index:100;background:rgba(5,7,12,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;backdrop-filter:blur(6px);}
 .start-overlay h2{color:#eaf6ff;font-size:24px;font-weight:700;}
 .start-overlay p{color:#8fb8cf;font-size:14px;max-width:400px;text-align:center;line-height:1.6;}
@@ -321,6 +281,7 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 </style>
 </head>
 <body>
+
 <div class="start-overlay" id="startOverlay">
     <h2>🎙️ PXT Hub</h2>
     <p>Set up your microphone and voice, then start.</p>
@@ -344,7 +305,7 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 </div>
 
 <div class="kiosk" id="kiosk" style="display:none;">
-    <video class="bg-video" id="bgVideo" autoplay loop playsinline style="display:none;"></video>
+    <video class="bg-video" id="bgVideo" autoplay loop playsinline muted style="display:none;"></video>
     <div class="bg-grad" id="bgGrad"></div><div class="grid-ov"></div><div class="scrim"></div>
     <div class="top-bar">
         <div class="mic-ind"><div class="mic-dot" id="micDot"></div><div class="mic-label" id="micLabel">MIC OFF</div></div>
@@ -353,7 +314,6 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
     </div>
     <div class="brand">PXT&nbsp;HUB</div>
     <div class="pulse-ring" id="pulseRing"><div class="icon">🎙️</div></div>
-    <!-- Badge ID input for manual entry (RFID later) -->
     <div id="badgeWrap" style="position:relative;z-index:2;display:none;margin-bottom:16px;">
         <div style="display:flex;align-items:center;gap:8px;">
             <input type="text" id="badgeInput" placeholder="Enter Badge ID" autocomplete="off" inputmode="numeric" pattern="[0-9]*"
@@ -380,7 +340,7 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 <script>
 (function(){
 var STAFF=__STAFF__;
-var THEMES=__THEMES__; // [{name, src(data-uri)}, ...] background theme videos
+var THEMES=__THEMES__;
 var $=function(id){return document.getElementById(id);};
 var micDot=$('micDot'),micLabel=$('micLabel'),debug=$('debug');
 var statusMain=$('statusMain'),statusSub=$('statusSub');
@@ -390,12 +350,9 @@ var rcard=$('rcard'),rn=$('rn'),ri=$('ri'),rv1=$('rv1'),rv2=$('rv2'),rv3=$('rv3'
 var micSelect=$('micSelect'),testFill=$('testFill'),testLabel=$('testLabel'),startBtn=$('startBtn');
 var voiceSelect=$('voiceSelect'),voicePreview=$('voicePreview');
 
-/* ===== THEME SWITCH DOTS =====
-   One dot per background theme video that actually loaded. Click a dot
-   to switch. If only zero/one theme is available, no dots are shown -
-   nothing to switch between yet. */
 var currentTheme=0;
 var themeDotsWrap=$('themeDots');
+
 function renderThemeDots(){
     if(!themeDotsWrap)return;
     themeDotsWrap.innerHTML='';
@@ -408,55 +365,23 @@ function renderThemeDots(){
         themeDotsWrap.appendChild(d);
     });
 }
+
 function switchTheme(i){
-    if(!THEMES||!THEMES[i]||i===currentTheme)return;
+    if(!THEMES||!THEMES[i])return;
     currentTheme=i;
     renderThemeDots();
     if(bgVideo&&THEMES[i].src){
-        var vol=bgVideo.volume,mut=bgVideo.muted;
         bgVideo.src=THEMES[i].src;
-        bgVideo.volume=vol;bgVideo.muted=mut;
         bgVideo.style.display='block';
         if(bgGrad)bgGrad.style.display='none';
         bgVideo.play().catch(function(){bgVideo.muted=true;bgVideo.play().catch(function(){});});
     }
 }
+
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-if(!SR){startBtn.style.display='none';return;}
 
-var speaking=false,listening=false,rec=null,shouldRun=true,lastActivity=Date.now();
-var restartTimeout=null,micStream=null,selectedDeviceId=null,testStream=null,testMeter=null;
-var userName=null,userStaff=null,sleepTimer=null,chosenVoice=null,wakeTimeoutTimer=null;
-var state='sleep'; // sleep | wake_listen | ready
-var SLEEP_TIMEOUT=30000; // inactivity timeout once logged in (ready state)
-var WAKE_TIMEOUT=25000;  // seconds allowed to enter a badge before going back to sleep
-var userLang='en'; // current session language: 'en' or native code
-var userNativeName=''; // e.g. 'Malayalam', 'Hindi'
+var micStream=null,selectedDeviceId=null,testStream=null,testMeter=null,chosenVoice=null;
 
-/* ===== LANGUAGE SUPPORT REMOVED =====
-   This kiosk now runs English-only. extractNativeLang() is kept as a
-   no-op (always returns null) so downstream code (handleLogin's
-   nativeLang check, etc.) continues to work unchanged and always takes
-   the English path, without touching that logic. */
-function extractNativeLang(langStr){
-    return null;
-}
-
-/* ===== TRANSLATIONS REMOVED =====
-   English-only build: tr() is kept as a no-op (always null) so every
-   call site like  tr('your_shift') ? tr('your_shift') : 'your shift is'
-   automatically falls through to its English default text, unchanged. */
-function tr(key){
-    return null;
-}
-
-function trGreet(){
-    var h=new Date().getHours();
-    var key=h<12?'greet_morning':h<17?'greet_afternoon':'greet_evening';
-    return tr(key)||timeGreet();
-}
-
-/* ===== VOICE ===== */
 var VP=['Google UK English Female','Google US English','Microsoft Zira','Microsoft Jenny','Samantha','Karen','Microsoft David'];
 function loadVoices(){
     var voices=window.speechSynthesis.getVoices();if(!voices.length)return;
@@ -470,140 +395,72 @@ function loadVoices(){
     for(var i=0;i<VP.length;i++){var v=voices.find(function(x){return x.name.indexOf(VP[i])>=0;});if(v){chosenVoice=v;voiceSelect.value=v.name;break;}}
     if(!chosenVoice&&en.length){chosenVoice=en[0];voiceSelect.value=en[0].name;}
 }
-window.speechSynthesis.onvoiceschanged=loadVoices;loadVoices();
+window.speechSynthesis.onvoiceschanged=loadVoices;
 voiceSelect.onchange=function(){var v=window.speechSynthesis.getVoices();chosenVoice=v.find(function(x){return x.name===voiceSelect.value;})||null;};
 voicePreview.onclick=function(){try{window.speechSynthesis.cancel();}catch(e){}var u=new SpeechSynthesisUtterance("Hello! I am your PXT Hub assistant.");u.rate=0.95;u.pitch=1.05;if(chosenVoice)u.voice=chosenVoice;window.speechSynthesis.speak(u);};
 
-/* ===== HELPERS ===== */
-function norm(s){return(s||"").toLowerCase().trim().replace(/[^a-z0-9\s]/g,"").replace(/\s+/g," ");}
-function pick(a){return a[Math.floor(Math.random()*a.length)];}
-function log(m){debug.textContent=m;}
-function setMic(on){micDot.classList.toggle('on',on);micLabel.textContent=on?'LISTENING':'MIC OFF';pulseRing.classList.toggle('active',on);}
-function setStatus(m,s){statusMain.textContent=m||'';statusSub.textContent=s||'';}
-function setPill(t){p1.textContent=t;}
-function hideCard(){rcard.classList.remove('show');}
-function showCard(s,cardInfo){
-    rn.textContent=s.name;ri.textContent='Badge: '+s.id;
-    if(cardInfo){rl1.textContent=cardInfo[0][0];rv1.textContent=cardInfo[0][1];rv1.className='val c-pres';rl2.textContent=cardInfo[1][0];rv2.textContent=cardInfo[1][1];rl3.textContent=cardInfo[2][0];rv3.textContent=cardInfo[2][1];}
-    else{rl1.textContent='Shift';rv1.textContent=s.shift||'—';rv1.className='val c-pres';rl2.textContent='Off Days';rv2.textContent=(s.off1||'')+' & '+(s.off2||'');rl3.textContent='Department';rv3.textContent=s.dept||'—';}
-    rcard.classList.add('show');
+async function loadMics(){
+    try{
+        var ts=await navigator.mediaDevices.getUserMedia({audio:true});
+        ts.getTracks().forEach(function(t){t.stop();});
+        var devs=await navigator.mediaDevices.enumerateDevices();
+        var mics=devs.filter(function(d){return d.kind==='audioinput';});
+        micSelect.innerHTML='';
+        if(mics.length===0){
+            micSelect.innerHTML='<option value="">No microphone found</option>';
+            return;
+        }
+        mics.forEach(function(m,i){
+            var o=document.createElement('option');
+            o.value=m.deviceId;
+            o.textContent=m.label||('Microphone '+(i+1));
+            micSelect.appendChild(o);
+        });
+        if(mics.length){
+            selectedDeviceId=mics[0].deviceId;
+            startBtn.disabled=false;
+            testMicDev(selectedDeviceId);
+        }
+    }catch(e){
+        micSelect.innerHTML='<option value="">Microphone Permission Denied</option>';
+    }
 }
 
-/* ===== MIC SETUP ===== */
-async function loadMics(){
-    try{var ts=await navigator.mediaDevices.getUserMedia({audio:true});ts.getTracks().forEach(function(t){t.stop();});
-    var devs=await navigator.mediaDevices.enumerateDevices();var mics=devs.filter(function(d){return d.kind==='audioinput';});
-    micSelect.innerHTML='';
-    mics.forEach(function(m,i){var o=document.createElement('option');o.value=m.deviceId;o.textContent=m.label||('Mic '+(i+1));micSelect.appendChild(o);});
-    if(mics.length){selectedDeviceId=mics[0].deviceId;startBtn.disabled=false;testMicDev(selectedDeviceId);}
-    }catch(e){micSelect.innerHTML='<option>Denied</option>';}
-}
 async function testMicDev(id){
     if(testStream){testStream.getTracks().forEach(function(t){t.stop();});}if(testMeter){testMeter.stop();}
     testFill.style.width='0%';
-    try{testStream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:id}}});
-    var ctx=new(window.AudioContext||window.webkitAudioContext)();var a=ctx.createAnalyser();a.fftSize=256;
-    ctx.createMediaStreamSource(testStream).connect(a);var d=new Uint8Array(a.frequencyBinCount);var on=true;
-    (function tk(){if(!on)return;a.getByteFrequencyData(d);var s=0;for(var i=0;i<d.length;i++)s+=d[i];
-    var p=Math.min(100,Math.round((s/d.length)/128*100));testFill.style.width=p+'%';
-    testFill.style.background=p>30?'#46ffb0':p>10?'#ffd166':'#ff5b5b';requestAnimationFrame(tk);})();
-    testMeter={stop:function(){on=false;try{ctx.close();}catch(e){}}};
+    try{
+        testStream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:id}}});
+        var ctx=new(window.AudioContext||window.webkitAudioContext)();var a=ctx.createAnalyser();a.fftSize=256;
+        ctx.createMediaStreamSource(testStream).connect(a);var d=new Uint8Array(a.frequencyBinCount);var on=true;
+        (function tk(){if(!on)return;a.getByteFrequencyData(d);var s=0;for(var i=0;i<d.length;i++)s+=d[i];
+        var p=Math.min(100,Math.round((s/d.length)/128*100));testFill.style.width=p+'%';
+        testFill.style.background=p>30?'#46ffb0':p>10?'#ffd166':'#ff5b5b';requestAnimationFrame(tk);})();
+        testMeter={stop:function(){on=false;try{ctx.close();}catch(e){}}};
     }catch(e){}
 }
 micSelect.onchange=function(){selectedDeviceId=micSelect.value;if(selectedDeviceId)testMicDev(selectedDeviceId);};
 
-/* ===== TTS =====
-   IMPORTANT LIMITATION: this kiosk uses the browser's built-in Web Speech
-   API (window.speechSynthesis) - there is no server/API integration here,
-   so voice quality and which languages even have a voice at all depend
-   entirely on what's installed on the machine/OS running the kiosk.
-   A true "high-quality neural TTS with correct regional phonemes" (Azure
-   Speech, Google Cloud TTS, ElevenLabs, etc.) would need a backend call
-   with an API key and audio playback - that's a real architecture change,
-   not a prompt/config tweak, and isn't something this static HTML file
-   can add on its own. What IS fixed here: more robust matching so we
-   actually find and use a native voice when the OS has one installed,
-   instead of silently falling back to a mismatched/default voice. */
-function normTag(s){return (s||'').toLowerCase().replace('_','-');}
-function speak(text,cb,forceLang){
-    speaking=true;stopListening();clearTimeout(sleepTimer);
-    try{window.speechSynthesis.cancel();}catch(e){}
-    setStatus(text,"");
-    var u=new SpeechSynthesisUtterance(text);
-    var lang=forceLang||(userLang==='en'?'en-US':userLang);
-    u.lang=lang;u.rate=0.95;u.pitch=1.05;
-    // Use chosen voice for English, auto-select for native
-    if(lang==='en-US'&&chosenVoice){u.voice=chosenVoice;}
-    else if(lang!=='en-US'){
-        var voices=window.speechSynthesis.getVoices();
-        var target=normTag(lang),base=target.split('-')[0];
-        // exact tag match first, then base-language match (case/underscore tolerant)
-        var nv=voices.find(function(v){return normTag(v.lang)===target;})
-            ||voices.find(function(v){return normTag(v.lang).indexOf(base+'-')===0||normTag(v.lang)===base;});
-        if(nv){u.voice=nv;}
-        else{log('No native voice installed for '+lang+' - using device default');}
+startBtn.onclick=function(){
+    if(testStream){testStream.getTracks().forEach(function(t){t.stop();});}
+    if(testMeter){testMeter.stop();}
+    $('startOverlay').style.display='none';
+    $('kiosk').style.display='flex';
+    if(THEMES&&THEMES.length>0){
+        switchTheme(0);
     }
-    var done=false;function fin(){if(done)return;done=true;speaking=false;if(cb)cb();}
-    u.onend=fin;u.onerror=fin;window.speechSynthesis.speak(u);
-    setTimeout(fin,Math.max(text.length*100,3000)+5000);
-}
+};
 
-/* ===== BADGE LOOKUP ===== */
-function findByBadge(id){
-    id=id.trim();
-    for(var i=0;i<STAFF.length;i++){
-        var sid=String(STAFF[i].id).trim();
-        if(sid===id)return STAFF[i];
-        // Partial match (last 6 digits)
-        if(id.length>=6 && sid.indexOf(id)>=0)return STAFF[i];
-        if(id.length>=6 && sid.slice(-6)===id.slice(-6))return STAFF[i];
-    }
-    return null;
-}
+/* ===== INITIAL EXECUTION ===== */
+loadMics();
+loadVoices();
+renderThemeDots();
 
-// Badge input handler
-document.addEventListener('DOMContentLoaded',function(){
-    var bi=document.getElementById('badgeInput');
-    var bb=document.getElementById('badgeBtn');
-    if(bb) bb.onclick=function(){if(bi&&bi.value.trim().length>=3) handleBadgeEntry(bi.value.trim());};
-    if(bi) bi.onkeydown=function(e){if(e.key==='Enter'&&bi.value.trim().length>=3) handleBadgeEntry(bi.value.trim());};
-});
-function handleBadgeEntry(val){
-    var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
-    handleLogin(val);
-}
-
-
-function timeGreet(){var h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";}
-function timeStr(){return new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});}
-// Date/day/month names now follow the active session language instead of
-// always rendering in English (previously hardcoded to 'en-US' regardless
-// of userLang - a real source of the "replies back in English" complaint).
-function activeLocale(){
-    if(userLang==='en'||userLang==='en-US') return 'en-US';
-    // Base language subtag works for Intl even without a country match
-    try{ new Intl.DateTimeFormat(userLang); return userLang; }catch(e){ return 'en-US'; }
-}
-function dateStr(){
-    try{
-        return new Date().toLocaleDateString(activeLocale(),{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    }catch(e){
-        return new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    }
-}
-
-/* ===== WAKE WORD - ultra broad ===== */
-function isWake(raw){
-    var n=norm(raw);
-    return n.indexOf('pxt')>=0 || n.indexOf('bxt')>=0 || n.indexOf('txt')>=0;
-}
 })();
 </script>
 </body>
 </html>"""
 
-# Fill placeholders
+# Render full screen component
 rendered_html = KIOSK_TEMPLATE.replace("__STAFF__", staff_json).replace("__THEMES__", themes_json)
-
-# Render full screen
-components.html(rendered_html, height=920, scrolling=False)
+components.html(rendered_html, height=1080, scrolling=False)
