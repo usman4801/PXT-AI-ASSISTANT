@@ -2,11 +2,28 @@
 PXT Hub - Amazon Canopy & Tablet Ready Voice Kiosk (English Only)
 Single-file Streamlit App - No external HTML template file needed.
 
-This merges the working kiosk frontend (wake-word "Hi PXT", badge/name
-login, staff lookup, glassmorphism UI, mic/voice setup screen, sleep/wake
-cycle) directly into this one app.py. Multi-language support has been
-removed - the kiosk now always greets and responds in English.
+This merges the working kiosk frontend (wake-word "Hi PXT", badge login,
+staff lookup, glassmorphism UI, mic/voice setup screen, sleep/wake cycle)
+directly into this one app.py. Multi-language support has been removed -
+the kiosk now always greets and responds in English.
+
+CHANGELOG (this revision):
+1) Login is now badge-number ONLY. The kiosk no longer guesses a name
+   from whatever it heard - if no valid badge is given, it politely
+   re-asks instead of logging someone in under a misheard name. A
+   20-25s "wake timeout" also puts the kiosk back to sleep if nobody
+   enters a badge in time. While waiting for a badge, "who are you" /
+   "what can you do" are answered directly without needing a login.
+2) Background theme video(s) are now embedded as base64 data URIs
+   instead of a plain relative <video src>. Streamlit's components.html
+   renders the kiosk inside a sandboxed iframe, so a relative filename
+   like "banner.mp4" never actually resolved to the file on disk - that
+   was why the banner video wasn't appearing. Data URIs always work.
+3) Any theme video file placed next to app.py (banner.mp4, banner2.mp4,
+   banner3.mp4, ...) is auto-detected and gets a small switch-dot in the
+   kiosk's top-right corner. Add more just by dropping the file in.
 """
+import base64
 import json
 import os
 
@@ -19,7 +36,6 @@ import streamlit.components.v1 as components
 # ----------------------------------------------------------------------
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 ADMIN_PASSWORD = "pxt123"  # NOTE: for production, move this to st.secrets
-VIDEO_SRC = "banner.mp4"   # default background video filename (served alongside app.py)
 
 st.set_page_config(
     page_title="PXT Hub Kiosk",
@@ -118,6 +134,53 @@ def load_staff_data() -> list:
 
 
 # ----------------------------------------------------------------------
+# 1b. BACKGROUND THEME VIDEOS
+#     Streamlit's components.html() renders the kiosk inside a sandboxed
+#     iframe, so a plain relative filename like "banner.mp4" does NOT
+#     resolve to the file sitting next to app.py - that was the reason
+#     the banner video wasn't showing at all. We read each theme file
+#     that exists next to app.py and inline it as a base64 data URI
+#     instead, which always works regardless of how Streamlit serves
+#     the app.
+#
+#     To add a theme: just drop a file with one of the names below next
+#     to app.py (banner.mp4 is the default/first theme). A small dot
+#     appears in the kiosk's top-right for every theme that loads
+#     successfully, letting staff switch between them live.
+# ----------------------------------------------------------------------
+THEME_FILENAMES = ["banner.mp4", "banner2.mp4", "banner3.mp4"]
+MAX_THEME_VIDEO_MB = 20  # safety cap so one huge video doesn't bloat the page
+
+
+def _video_to_data_uri(path: str) -> str:
+    try:
+        size_mb = os.path.getsize(path) / (1024 * 1024)
+        if size_mb > MAX_THEME_VIDEO_MB:
+            st.sidebar.warning(
+                f"{os.path.basename(path)} is {size_mb:.1f}MB - skipped "
+                f"(over the {MAX_THEME_VIDEO_MB}MB embed limit)."
+            )
+            return ""
+        with open(path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("ascii")
+        return f"data:video/mp4;base64,{encoded}"
+    except Exception as e:
+        st.sidebar.error(f"Video load error ({os.path.basename(path)}): {e}")
+        return ""
+
+
+def load_themes() -> list:
+    themes = []
+    for fname in THEME_FILENAMES:
+        fpath = os.path.join(APP_DIR, fname)
+        if os.path.exists(fpath):
+            data_uri = _video_to_data_uri(fpath)
+            if data_uri:
+                themes.append({"name": fname, "src": data_uri})
+    return themes
+
+
+# ----------------------------------------------------------------------
 # 2. ADMIN SIDEBAR (password-protected data upload)
 # ----------------------------------------------------------------------
 with st.sidebar:
@@ -144,6 +207,15 @@ with st.sidebar:
             st.caption(f"{len(staff_preview)} staff records loaded.")
             if staff_preview:
                 st.dataframe(pd.DataFrame(staff_preview), use_container_width=True)
+
+            theme_preview = load_themes()
+            if theme_preview:
+                st.caption(
+                    f"{len(theme_preview)} background theme video(s) loaded: "
+                    + ", ".join(t["name"] for t in theme_preview)
+                )
+            else:
+                st.caption("No background theme video found - add banner.mp4 next to app.py.")
         else:
             st.error("Incorrect password")
 
@@ -166,11 +238,14 @@ st.markdown(
 # 4. SINGLE-FILE KIOSK HTML/JS/VOICE COMPONENT
 #    The full kiosk frontend is embedded below as a raw string (not an
 #    f-string) to avoid having to escape the JS's own curly braces.
-#    __STAFF__ and __VIDEO__ are simple text placeholders swapped out
+#    __STAFF__ and __THEMES__ are simple text placeholders swapped out
 #    with .replace() right before rendering.
 # ----------------------------------------------------------------------
 staff_data = load_staff_data()
 staff_json = json.dumps(staff_data, ensure_ascii=False)
+
+themes_data = load_themes()
+themes_json = json.dumps(themes_data, ensure_ascii=False)
 
 KIOSK_TEMPLATE = r"""<!DOCTYPE html>
 <html>
@@ -239,9 +314,10 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 .mic-test-label{font-size:10px;color:#8fb8cf;}
 .voice-preview{padding:8px 18px;border-radius:999px;border:1px solid rgba(0,190,255,.25);background:rgba(0,150,255,.08);color:#9fd8ef;font-size:12px;cursor:pointer;transition:all .2s;margin-top:2px;}
 .voice-preview:hover{background:rgba(0,150,255,.2);}
-.theme-dot{width:18px;height:18px;border-radius:50%;border:2px solid rgba(0,190,255,.4);background:linear-gradient(135deg,#0af,#0fa);cursor:pointer;transition:all .3s;opacity:.6;flex-shrink:0;}
-.theme-dot:hover{opacity:1;box-shadow:0 0 12px rgba(0,190,255,.5);transform:scale(1.15);}
-.theme-dot.alt{background:linear-gradient(135deg,#f0a,#fa0);}
+.theme-dots{display:flex;gap:8px;align-items:center;flex-shrink:0;}
+.theme-dot{width:12px;height:12px;border-radius:50%;border:2px solid rgba(0,190,255,.4);background:rgba(255,255,255,.1);cursor:pointer;transition:all .25s;opacity:.55;flex-shrink:0;}
+.theme-dot:hover{opacity:1;box-shadow:0 0 10px rgba(0,190,255,.5);transform:scale(1.2);}
+.theme-dot.active{opacity:1;background:linear-gradient(135deg,#0af,#0fa);box-shadow:0 0 10px rgba(0,190,255,.6);}
 </style>
 </head>
 <body>
@@ -273,18 +349,18 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
     <div class="top-bar">
         <div class="mic-ind"><div class="mic-dot" id="micDot"></div><div class="mic-label" id="micLabel">MIC OFF</div></div>
         <div class="debug" id="debug">&nbsp;</div>
-        <div class="theme-dot" id="themeDot" title="Switch theme"></div>
+        <div class="theme-dots" id="themeDots"></div>
     </div>
     <div class="brand">PXT&nbsp;HUB</div>
     <div class="pulse-ring" id="pulseRing"><div class="icon">&#127897;&#65039;</div></div>
     <!-- Badge ID input for manual entry (RFID later) -->
     <div id="badgeWrap" style="position:relative;z-index:2;display:none;margin-bottom:16px;">
         <div style="display:flex;align-items:center;gap:8px;">
-            <input type="text" id="badgeInput" placeholder="Enter Badge ID" autocomplete="off"
+            <input type="text" id="badgeInput" placeholder="Enter Badge ID" autocomplete="off" inputmode="numeric" pattern="[0-9]*"
                 style="padding:10px 18px;border-radius:12px;border:1px solid rgba(0,190,255,.4);background:rgba(10,16,26,.8);color:#dff5ff;font-size:18px;width:220px;text-align:center;outline:none;letter-spacing:2px;" />
             <button id="badgeBtn" style="padding:10px 20px;border-radius:12px;border:1px solid rgba(0,190,255,.4);background:rgba(0,150,255,.2);color:#dff5ff;font-size:14px;cursor:pointer;font-weight:600;">GO</button>
         </div>
-        <div style="color:rgba(127,208,239,.6);font-size:10px;margin-top:6px;text-align:center;">Or say your Badge ID / Name</div>
+        <div style="color:rgba(127,208,239,.6);font-size:10px;margin-top:6px;text-align:center;">Or say your Badge ID number</div>
     </div>
     <div class="status-display">
         <div class="status-main" id="statusMain"></div>
@@ -304,7 +380,7 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 <script>
 (function(){
 var STAFF=__STAFF__;
-var VIDEO_SRC="__VIDEO__";
+var THEMES=__THEMES__; // [{name, src(data-uri)}, ...] background theme videos
 var $=function(id){return document.getElementById(id);};
 var micDot=$('micDot'),micLabel=$('micLabel'),debug=$('debug');
 var statusMain=$('statusMain'),statusSub=$('statusSub');
@@ -314,27 +390,46 @@ var rcard=$('rcard'),rn=$('rn'),ri=$('ri'),rv1=$('rv1'),rv2=$('rv2'),rv3=$('rv3'
 var micSelect=$('micSelect'),testFill=$('testFill'),testLabel=$('testLabel'),startBtn=$('startBtn');
 var voiceSelect=$('voiceSelect'),voicePreview=$('voicePreview');
 
-var THEMES=["__VIDEO__","banner2.mp4"];
+/* ===== THEME SWITCH DOTS =====
+   One dot per background theme video that actually loaded. Click a dot
+   to switch. If only zero/one theme is available, no dots are shown -
+   nothing to switch between yet. */
 var currentTheme=0;
-var themeDot=$('themeDot');
-themeDot.onclick=function(){
-    currentTheme=(currentTheme+1)%THEMES.length;
-    themeDot.classList.toggle('alt',currentTheme===1);
-    if(bgVideo){
+var themeDotsWrap=$('themeDots');
+function renderThemeDots(){
+    if(!themeDotsWrap)return;
+    themeDotsWrap.innerHTML='';
+    if(!THEMES||THEMES.length<2)return;
+    THEMES.forEach(function(t,i){
+        var d=document.createElement('div');
+        d.className='theme-dot'+(i===currentTheme?' active':'');
+        d.title=t.name||('Theme '+(i+1));
+        d.onclick=function(){switchTheme(i);};
+        themeDotsWrap.appendChild(d);
+    });
+}
+function switchTheme(i){
+    if(!THEMES||!THEMES[i]||i===currentTheme)return;
+    currentTheme=i;
+    renderThemeDots();
+    if(bgVideo&&THEMES[i].src){
         var vol=bgVideo.volume,mut=bgVideo.muted;
-        bgVideo.src=THEMES[currentTheme];
+        bgVideo.src=THEMES[i].src;
         bgVideo.volume=vol;bgVideo.muted=mut;
+        bgVideo.style.display='block';
+        if(bgGrad)bgGrad.style.display='none';
         bgVideo.play().catch(function(){bgVideo.muted=true;bgVideo.play().catch(function(){});});
     }
-};
+}
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 if(!SR){startBtn.style.display='none';return;}
 
 var speaking=false,listening=false,rec=null,shouldRun=true,lastActivity=Date.now();
 var restartTimeout=null,micStream=null,selectedDeviceId=null,testStream=null,testMeter=null;
-var userName=null,userStaff=null,silenceTimer=null,sleepTimer=null,chosenVoice=null;
+var userName=null,userStaff=null,sleepTimer=null,chosenVoice=null,wakeTimeoutTimer=null;
 var state='sleep'; // sleep | wake_listen | ready
-var SLEEP_TIMEOUT=30000;
+var SLEEP_TIMEOUT=30000; // inactivity timeout once logged in (ready state)
+var WAKE_TIMEOUT=25000;  // seconds allowed to enter a badge before going back to sleep
 var userLang='en'; // current session language: 'en' or native code
 var userNativeName=''; // e.g. 'Malayalam', 'Hindi'
 
@@ -419,19 +514,19 @@ micSelect.onchange=function(){selectedDeviceId=micSelect.value;if(selectedDevice
 
 /* ===== TTS =====
    IMPORTANT LIMITATION: this kiosk uses the browser's built-in Web Speech
-   API (window.speechSynthesis) — there is no server/API integration here,
+   API (window.speechSynthesis) - there is no server/API integration here,
    so voice quality and which languages even have a voice at all depend
    entirely on what's installed on the machine/OS running the kiosk.
    A true "high-quality neural TTS with correct regional phonemes" (Azure
    Speech, Google Cloud TTS, ElevenLabs, etc.) would need a backend call
-   with an API key and audio playback — that's a real architecture change,
+   with an API key and audio playback - that's a real architecture change,
    not a prompt/config tweak, and isn't something this static HTML file
    can add on its own. What IS fixed here: more robust matching so we
    actually find and use a native voice when the OS has one installed,
    instead of silently falling back to a mismatched/default voice. */
 function normTag(s){return (s||'').toLowerCase().replace('_','-');}
 function speak(text,cb,forceLang){
-    speaking=true;stopListening();clearTimeout(silenceTimer);clearTimeout(sleepTimer);
+    speaking=true;stopListening();clearTimeout(sleepTimer);
     try{window.speechSynthesis.cancel();}catch(e){}
     setStatus(text,"");
     var u=new SpeechSynthesisUtterance(text);
@@ -446,26 +541,14 @@ function speak(text,cb,forceLang){
         var nv=voices.find(function(v){return normTag(v.lang)===target;})
             ||voices.find(function(v){return normTag(v.lang).indexOf(base+'-')===0||normTag(v.lang)===base;});
         if(nv){u.voice=nv;}
-        else{log('No native voice installed for '+lang+' — using device default');}
+        else{log('No native voice installed for '+lang+' - using device default');}
     }
     var done=false;function fin(){if(done)return;done=true;speaking=false;if(cb)cb();}
     u.onend=fin;u.onerror=fin;window.speechSynthesis.speak(u);
     setTimeout(fin,Math.max(text.length*100,3000)+5000);
 }
 
-/* ===== STAFF SEARCH ===== */
-function findStaff(t){
-    t=norm(t);if(!t||t.length<2)return null;
-    for(var i=0;i<STAFF.length;i++){if(norm(STAFF[i].name)&&t.indexOf(norm(STAFF[i].name))>=0)return STAFF[i];}
-    for(var i=0;i<STAFF.length;i++){var al=STAFF[i].aliases||[];for(var j=0;j<al.length;j++){if(al[j].length>1&&t.indexOf(norm(al[j]))>=0)return STAFF[i];}}
-    for(var i=0;i<STAFF.length;i++){var tk=norm(STAFF[i].name).split(" ");if(tk.length>0&&tk.every(function(w){return t.indexOf(w)>=0;}))return STAFF[i];}
-    var words=t.split(" ").filter(function(w){return w.length>=3;});
-    for(var i=0;i<STAFF.length;i++){var tk=norm(STAFF[i].name).split(" ");
-        for(var j=0;j<tk.length;j++){if(tk[j].length>=3){for(var k=0;k<words.length;k++){if(words[k]===tk[j])return STAFF[i];}}}
-    }
-    return null;
-}
-
+/* ===== BADGE LOOKUP ===== */
 function findByBadge(id){
     id=id.trim();
     for(var i=0;i<STAFF.length;i++){
@@ -495,7 +578,7 @@ function timeGreet(){var h=new Date().getHours();return h<12?"Good morning":h<17
 function timeStr(){return new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});}
 // Date/day/month names now follow the active session language instead of
 // always rendering in English (previously hardcoded to 'en-US' regardless
-// of userLang — a real source of the "replies back in English" complaint).
+// of userLang - a real source of the "replies back in English" complaint).
 function activeLocale(){
     if(userLang==='en'||userLang==='en-US') return 'en-US';
     // Base language subtag works for Intl even without a country match
@@ -509,12 +592,12 @@ function dateStr(){
     }
 }
 
-/* ===== WAKE WORD — ultra broad ===== */
+/* ===== WAKE WORD - ultra broad ===== */
 function isWakeWord(text){
     var t=norm(text);
     // Must have a greeting
     if(!/\b(hi|hey|hello|hai|hype|high|hike)\b/.test(t)) return false;
-    // Must have something that sounds like PXT — any word with p/b/v + x/k/s
+    // Must have something that sounds like PXT - any word with p/b/v + x/k/s
     var words=t.split(" ");
     for(var i=0;i<words.length;i++){
         var w=words[i];if(w.length<2)continue;
@@ -529,37 +612,11 @@ function isWakeWord(text){
     return false;
 }
 
-/* ===== EXTRACT NAME from speech ===== */
-function extractName(text){
-    var t=text.toLowerCase().trim();
-    // Remove ALL filler/intro words
-    var junk=["hi","hello","hey","salam","good morning","good afternoon","good evening",
-              "my name is","my name","name is","i am","im","i'm","this is","its","it's",
-              "mera naam hai","mera naam","naam hai","main hoon","main hun","call me",
-              "you can call me","please","sir","madam","bhai","the","a","an","is","am",
-              "are","was","um","uh","so","ok","okay","well","and","yes","yeah"];
-    // Sort longest first so "my name is" matches before "my" and "name" and "is"
-    junk.sort(function(a,b){return b.length-a.length;});
-    for(var i=0;i<junk.length;i++){
-        var re=new RegExp("\\b"+junk[i].replace(/\s+/g,"\\s+")+"\\b","gi");
-        t=t.replace(re,"");
-    }
-    t=t.replace(/\s+/g," ").trim();
-    // If nothing left, take last word from original
-    if(t.length<2){
-        var w=text.trim().split(/\s+/);
-        t=w[w.length-1];
-    }
-    // Capitalize
-    return t.split(" ").filter(function(w){return w.length>=2;}).slice(0,2)
-        .map(function(w){return w.charAt(0).toUpperCase()+w.slice(1).toLowerCase();}).join(" ")||text.trim();
-}
-
 /* ===== SLEEP/WAKE ===== */
 function goToSleep(){
     stopListening();hideCard();userName=null;userStaff=null;state='sleep';userLang='en';userNativeName='';
+    clearTimeout(wakeTimeoutTimer);clearTimeout(sleepTimer);
     var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
-    clearTimeout(silenceTimer);clearTimeout(sleepTimer);
     setStatus("","Say \"Hi PXT\" to wake me up");setPill("Say \"Hi PXT\" to start");log('Sleep mode');
     setTimeout(startListening,300);
 }
@@ -571,13 +628,26 @@ function resetSleepTimer(){
         },SLEEP_TIMEOUT);
     }
 }
+/* Gives the person ~20-25s (WAKE_TIMEOUT) to actually provide a badge
+   after waking the kiosk. If it lapses while still waiting for a
+   badge, the kiosk goes back to sleep on its own. Restarted on every
+   interaction in wake_listen (a meta-question, a bad attempt) so an
+   engaged person always gets a fresh window. */
+function startWakeTimeout(){
+    clearTimeout(wakeTimeoutTimer);
+    wakeTimeoutTimer=setTimeout(function(){
+        if(state==='wake_listen'&&!speaking){
+            speak("No badge received. Going back to sleep. Say Hi PXT when you need me!",function(){goToSleep();});
+        }
+    },WAKE_TIMEOUT);
+}
 
 /* ===== FUZZY COMPREHENSION FALLBACK =====
    The intent matching below is regex/keyword based, so misspellings,
    ASR mis-hearings, or unfamiliar phrasing fall straight to the generic
    reply. This adds a lightweight typo-correction pass that only kicks in
    when nothing matched, so it never overrides a confident regex hit.
-   NOTE: this is NOT true semantic understanding — it corrects near-miss
+   NOTE: this is NOT true semantic understanding - it corrects near-miss
    spellings of known keywords (e.g. "shft"->"shift", "manger"->"manager").
    Real free-form semantic comprehension would need an actual NLU/LLM
    backend call, which this static, client-only kiosk page doesn't have
@@ -722,7 +792,7 @@ function getResponse(text){
     if(/\b(hi|hello|hey|salam|assalam|namaste|namaskaram|habari|bonjour)\b/i.test(t))return{type:'ai',text:g+", "+N+"! "+(tr('how_are')||pick(["How are you?","What's up?","Welcome!"]))};
     if(/(how are you|kaise ho|kya haal|kya hal|kayf halak|kaisa hai)/i.test(t))return{type:'ai',text:tr('how_are')||pick(["Great "+N+"!","Fantastic "+N+"!","100% "+N+"!"])};
     if(/(who are you|your name|kaun ho|tumhara naam)/i.test(t))return{type:'ai',text:"PXT Hub, "+N+"!"};
-    // Capabilities — previously listed only 4-5 items; now enumerates
+    // Capabilities - previously listed only 4-5 items; now enumerates
     // every data field this kiosk can actually answer from the roster,
     // built dynamically instead of a hardcoded short list.
     if(/(what can you do|help|madad|sahayam|kya kar sakte|capabilit|features|what.+know)/i.test(t)){
@@ -743,9 +813,9 @@ function getResponse(text){
     return{type:'ai',fallback:true,text:tr('how_help')||pick(["Try 'my shift', 'my week off', or 'my manager', "+N+"!",N+", ask me anything!","I'm here "+N+"!"])};
 }
 
-/* ===== RECOGNITION — instant restart, no gaps ===== */
+/* ===== RECOGNITION - instant restart, no gaps ===== */
 function stopListening(){
-    listening=false;clearTimeout(restartTimeout);clearTimeout(silenceTimer);
+    listening=false;clearTimeout(restartTimeout);
     if(rec){try{rec.abort();}catch(e){}rec=null;}setMic(false);
 }
 
@@ -755,14 +825,14 @@ function startListening(){
     rec=new SR();
     rec.continuous=false;
     rec.interimResults=true;
-    rec.lang='en-US'; // Always listen in English — responses will be in native language
+    rec.lang='en-US'; // Always listen in English - responses will be in native language
     rec.maxAlternatives=1;
     var wakeHandled=false;
 
     rec.onstart=function(){
         listening=true;setMic(true);
         if(state==='sleep'){log('Waiting for "Hi PXT"...');setStatus("","Say \"Hi PXT\" to wake me up");setPill("Say \"Hi PXT\"");}
-        else if(state==='wake_listen'){log('Say your name...');setStatus("","tell me your name");setPill("Your name?");}
+        else if(state==='wake_listen'){log('Waiting for badge...');setStatus("","enter or say your badge number");setPill("Badge number?");}
         else if(state==='lang_choose'){log('Choose language...');setStatus("","English or "+userNativeName+"?");setPill("English or "+userNativeName+"?");}
         else{log('Listening...');setStatus("","listening");setPill("Listening...");}
     };
@@ -799,7 +869,7 @@ function startListening(){
         if(last && last.isFinal){
             var final_txt=last[0].transcript.trim();
             if(final_txt.length<2) return;
-            if(state==='wake_listen') handleLogin(final_txt);
+            if(state==='wake_listen') handleWakeListen(final_txt);
             else if(state==='lang_choose') handleLangChoice(final_txt);
             else if(state==='ready') handleInput(final_txt);
         }
@@ -814,21 +884,24 @@ function handleWake(){
     // Show badge input
     var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='block';
     var bi=document.getElementById('badgeInput');if(bi){bi.value='';bi.focus();}
+    startWakeTimeout();
     speak(timeGreet()+"! Welcome to PXT Hub. Please enter your badge number.",function(){startListening();});
 }
 
+/* Login is badge-number ONLY. The kiosk used to fall back to guessing a
+   name out of whatever it heard when no badge matched - that's the
+   "ultay sidhay naam" bug. Now, if the text has no valid badge number
+   in it, we simply re-ask for the badge instead of logging someone in
+   under a misheard/garbled name. */
 function handleLogin(text){
     stopListening();hideCard();
     var digits=text.replace(/[^0-9]/g,"");
-    var staff=null;
-    var name=text.trim();
-    if(digits.length>=5) staff=findByBadge(digits);
-    if(!staff){name=extractName(text);staff=findStaff(name)||findStaff(text);}
+    var staff=digits.length>=5?findByBadge(digits):null;
     if(staff){
+        clearTimeout(wakeTimeoutTimer);
         userName=staff.name.split(" ")[0];userStaff=staff;
         userLang='en';userNativeName='';
         var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
-        // Check if staff has a native language
         var nativeLang=extractNativeLang(staff.language);
         if(nativeLang){
             userNativeName=nativeLang.name;
@@ -843,13 +916,31 @@ function handleLogin(text){
     } else if(digits.length>=5){
         var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='block';
         var bi=document.getElementById('badgeInput');if(bi){bi.value='';bi.focus();}
-        speak("Sorry, badge "+digits+" was not found. Please check and try again.",function(){state='wake_listen';startListening();});
+        speak("Sorry, badge "+digits+" was not found. Please check and try again.",
+            function(){state='wake_listen';startWakeTimeout();startListening();});
     } else {
-        userName=name;userStaff=null;state='ready';
-        var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
-        speak(timeGreet()+", "+userName+"! I couldn't find your record. Please try your badge number instead.",
-            function(){resetSleepTimer();startListening();});
+        speak("Please enter or say your badge number to continue.",
+            function(){state='wake_listen';startWakeTimeout();startListening();});
     }
+}
+
+/* Handles anything heard while the kiosk is waiting for a badge
+   (wake_listen state). "Who are you" / "what can you do" are answered
+   right away without needing a login; anything else is treated as a
+   badge attempt via handleLogin(). */
+function handleWakeListen(text){
+    var t=norm(text);
+    if(/\b(who are you|what are you|your name|aap kaun ho|kaun ho)\b/i.test(t)){
+        startWakeTimeout();
+        speak("I am your PXT Hub assistant.",function(){startListening();});
+        return;
+    }
+    if(/(what can you do|help me|capabilit|features|what do you do|what.+can.+help)/i.test(t)){
+        startWakeTimeout();
+        speak("I can help with your shift, week off, department, manager, working hours, and more. Please enter or say your badge number to begin.",function(){startListening();});
+        return;
+    }
+    handleLogin(text);
 }
 
 function handleLangChoice(text){
@@ -890,10 +981,10 @@ setInterval(function(){
     }
 },3000);
 
-/* ===== VISIBILITY — restart when tab becomes visible ===== */
+/* ===== VISIBILITY - restart when tab becomes visible ===== */
 document.addEventListener('visibilitychange',function(){
     if(!document.hidden&&shouldRun&&!speaking&&!listening){
-        log("Tab visible — restarting");setTimeout(startListening,300);
+        log("Tab visible - restarting");setTimeout(startListening,300);
     }
 });
 
@@ -901,8 +992,11 @@ document.addEventListener('visibilitychange',function(){
 startBtn.onclick=async function(){
     if(testStream){testStream.getTracks().forEach(function(t){t.stop();});}if(testMeter){testMeter.stop();}
     $('startOverlay').style.display='none';$('kiosk').style.display='flex';
-    if(VIDEO_SRC){bgVideo.src=VIDEO_SRC;bgVideo.style.display="block";bgVideo.muted=false;bgVideo.volume=0.12;
-        bgVideo.play().then(function(){if(bgGrad)bgGrad.style.display="none";}).catch(function(){bgVideo.muted=true;bgVideo.play().catch(function(){});});}
+    renderThemeDots();
+    if(THEMES&&THEMES.length&&THEMES[currentTheme]&&THEMES[currentTheme].src){
+        bgVideo.src=THEMES[currentTheme].src;bgVideo.style.display="block";bgVideo.muted=false;bgVideo.volume=0.12;
+        bgVideo.play().then(function(){if(bgGrad)bgGrad.style.display="none";}).catch(function(){bgVideo.muted=true;bgVideo.play().catch(function(){});});
+    }
     try{var w=new SpeechSynthesisUtterance(' ');w.volume=0;if(chosenVoice)w.voice=chosenVoice;window.speechSynthesis.speak(w);}catch(e){}
     try{var c=selectedDeviceId?{audio:{deviceId:{exact:selectedDeviceId}}}:{audio:true};
         micStream=await navigator.mediaDevices.getUserMedia(c);
@@ -919,6 +1013,6 @@ loadMics();
 </body>
 </html>"""
 
-kiosk_html_code = KIOSK_TEMPLATE.replace("__STAFF__", staff_json).replace("__VIDEO__", VIDEO_SRC)
+kiosk_html_code = KIOSK_TEMPLATE.replace("__STAFF__", staff_json).replace("__THEMES__", themes_json)
 
 components.html(kiosk_html_code, height=900, scrolling=False)
