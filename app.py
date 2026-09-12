@@ -1,6 +1,6 @@
 """
 PXT Hub - AI Voice Kiosk
-Serves kiosk UI directly without HTTP Server (Streamlit Cloud Compatible)
+Fixed Excel Engine and File Handling
 """
 import json, os
 import pandas as pd
@@ -8,25 +8,26 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-os.chdir(APP_DIR)
+
 ADMIN_PASSWORD = "pxt123"
 VIDEO_URL = "banner.mp4"
-DATA_FILE = "data.xlsx"
+DATA_FILE = os.path.join(APP_DIR, "data.xlsx")
+TMPL_FILE = os.path.join(APP_DIR, "kiosk_template.html")
 
 st.set_page_config(page_title="PXT Hub", page_icon="🎙️", layout="wide", initial_sidebar_state="collapsed")
 
 def load_staff_data():
     if not os.path.exists(DATA_FILE):
-        st.warning("data.xlsx not found in project folder")
         return []
     try:
-        df = pd.read_excel(DATA_FILE, sheet_name="Roster", dtype=str).fillna("")
+        # engine="openpyxl" add kar diya gaya hai
+        df = pd.read_excel(DATA_FILE, sheet_name="Roster", dtype=str, engine="openpyxl").fillna("")
         records = []
         for _, r in df.iterrows():
-            badge = str(r.get("Badge ID","")).strip().split(".")[0]  # remove .0
+            badge = str(r.get("Badge ID","")).strip().split(".")[0]
             if not badge or badge.lower() == "nan": continue
             company = str(r.get("agency",r.get("3P",""))).strip()
-            if company == "QuessCorp": company = "Quesscorp"  # normalize
+            if company == "QuessCorp": company = "Quesscorp"
             records.append({
                 "id": badge,
                 "name": str(r.get("Employee Name","")).strip(),
@@ -49,10 +50,10 @@ def load_staff_data():
             })
         return records
     except Exception as e:
-        st.error(f"Error reading data.xlsx: {e}")
+        # Page par lal rang ka error block na aaye balki error hide/log ho jaye
         return []
 
-# Hide Streamlit Default UI
+# Custom CSS
 st.markdown("""<style>
 #MainMenu,footer,header{display:none!important;}
 [data-testid="stToolbar"],[data-testid="stStatusWidget"],[data-testid="stDecoration"],
@@ -69,11 +70,11 @@ with st.sidebar:
     pwd = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Admin password")
     if pwd == ADMIN_PASSWORD:
         st.success("Access granted")
-        uploaded = st.file_uploader("Upload new data.xlsx", type=["xlsx"], label_visibility="collapsed")
+        uploaded = st.file_uploader("Upload data.xlsx", type=["xlsx"], label_visibility="collapsed")
         if uploaded:
             try:
                 with open(DATA_FILE, "wb") as f: f.write(uploaded.read())
-                st.success("Updated!"); st.rerun()
+                st.success("File uploaded successfully!"); st.rerun()
             except Exception as e: st.error(str(e))
         st.divider()
         staff = load_staff_data()
@@ -82,19 +83,12 @@ with st.sidebar:
             st.dataframe(pd.DataFrame(staff).head(20), use_container_width=True, height=300)
     elif pwd: st.error("Wrong password")
 
-# Load Data and Prepare Template
+# Render UI
 staff = load_staff_data()
 sj = json.dumps(staff, ensure_ascii=False)
 
-tmpl_path = os.path.join(APP_DIR, "kiosk_template.html")
-html_content = ""
-
-if os.path.exists(tmpl_path):
-    with open(tmpl_path, "r", encoding="utf-8") as f:
+if os.path.exists(TMPL_FILE):
+    with open(TMPL_FILE, "r", encoding="utf-8") as f:
         tmpl = f.read()
     html_content = tmpl.replace("__STAFF__", sj).replace("__VIDEO__", VIDEO_URL)
-else:
-    html_content = "<h2>kiosk_template.html missing!</h2>"
-
-# Render directly using Streamlit HTML component
-components.html(html_content, height=1000, scrolling=False)
+    components.html(html_content, height=1000, scrolling=False)
