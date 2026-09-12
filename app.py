@@ -1,648 +1,796 @@
 """
-PXT HUB - Clean Cyber Kiosk with Real-Time Audio Detection & Speech Recognition
-Restored from user's original working build. Minimum changes for Canopy compliance
-+ S3 banner fetch + sandbox-safe navigation.
+PXT Hub — AI Voice Kiosk
+=========================
+A full-screen, browser-mic-based voice kiosk built with Streamlit.
+
+IMPORTANT DEPLOYMENT NOTE:
+Browser speech recognition (Web Speech API) only works over HTTPS or on
+localhost. Streamlit Community Cloud serves over HTTPS by default, so
+deployment there works out of the box. If you run this on a local
+network kiosk laptop without HTTPS, use `localhost` (not a LAN IP) or
+set up a local TLS certificate, otherwise Chrome will silently block
+the microphone.
+
+Supported/tested browser: Google Chrome or Microsoft Edge (both use the
+webkitSpeechRecognition engine). Firefox/Safari do not support the
+wake-word style continuous recognition used here.
 """
 
-from __future__ import annotations
-
-import os
-import time
 import json
+import os
+
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
-APP_TITLE = "PXT HUB"
-DATA_FILE = "staff_data.csv"
-RESET_DELAY = 25
-
-# S3 (Canopy Storage) — all via env vars, no hardcoded secrets
-S3_BUCKET   = os.environ.get("PXT_S3_BUCKET",   "")
-S3_PREFIX   = os.environ.get("PXT_S3_PREFIX",   "")
-S3_BANNER_1 = os.environ.get("PXT_BANNER_1_KEY", "banner.mp4")
-S3_BANNER_2 = os.environ.get("PXT_BANNER_2_KEY", "banner2.mp4")
-S3_DATA_KEY = os.environ.get("PXT_DATA_KEY",     "staff_data.csv")
-
-# Local dev fallback — use Streamlit static folder (banner.mp4 in /static)
-LOCAL_BANNER_1 = "app/static/banner.mp4"
-LOCAL_BANNER_2 = "app/static/banner2.mp4"
+# --------------------------------------------------------------------------
+# CONFIG
+# --------------------------------------------------------------------------
+CSV_PATH = "staff_data.csv"
+ADMIN_PASSWORD = "pxt123"
+REQUIRED_COLUMNS = ["EmployeeID", "Name", "Status", "RemainingLeaves", "NextOffDay"]
 
 st.set_page_config(
-    page_title=APP_TITLE,
-    page_icon="🤖",
+    page_title="PXT Hub",
+    page_icon="🎙️",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# ============================================================
-# S3 HELPERS
-# ============================================================
-try:
-    import boto3
-    _BOTO_OK = True
-except ImportError:
-    _BOTO_OK = False
-
-
-@st.cache_resource(show_spinner=False)
-def _s3_client():
-    if not _BOTO_OK or not S3_BUCKET:
-        return None
-    try:
-        return boto3.client("s3")
-    except Exception:
-        return None
-
-
-@st.cache_data(ttl=1800, show_spinner=False)
-def s3_presigned_url(key: str, local_fallback: str) -> str:
-    s3 = _s3_client()
-    if s3 is None or not S3_BUCKET:
-        return local_fallback  # local dev — Streamlit static file
-    try:
-        full_key = f"{S3_PREFIX}/{key}" if S3_PREFIX else key
-        return s3.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": S3_BUCKET, "Key": full_key},
-            ExpiresIn=3600,
-        )
-    except Exception:
-        return local_fallback
-
-
-@st.cache_data(ttl=600, show_spinner=False)
-def s3_load_csv(key: str):
-    s3 = _s3_client()
-    if s3 is None or not S3_BUCKET:
-        return None
-    try:
-        full_key = f"{S3_PREFIX}/{key}" if S3_PREFIX else key
-        obj = s3.get_object(Bucket=S3_BUCKET, Key=full_key)
-        return pd.read_csv(obj["Body"], dtype=str).fillna("")
-    except Exception:
-        return None
-
-
-# Session state
-st.session_state.setdefault("active_banner", 1)
-st.session_state.setdefault("kiosk_state", "idle")
-st.session_state.setdefault("current_employee", None)
-st.session_state.setdefault("last_heard", "")
-st.session_state.setdefault("last_interaction", None)
-
-# Banner switch
-if "switch_banner" in st.query_params:
-    st.session_state.active_banner = 2 if st.session_state.active_banner == 1 else 1
-    del st.query_params["switch_banner"]
-    st.rerun()
-
-# Voice payload arrival
-if "voice_payload" in st.query_params:
-    spoken_val = str(st.query_params["voice_payload"]).strip()
-    del st.query_params["voice_payload"]
-    st.session_state["last_interaction"] = time.time()
-    cs = st.session_state.get("kiosk_state", "idle")
-    if cs == "idle":
-        st.session_state["kiosk_state"] = "asked_badge"
-        st.session_state["last_heard"] = ""
-    else:
-        st.session_state["last_heard"] = spoken_val
-    st.rerun()
-
-banner1_url = s3_presigned_url(S3_BANNER_1, LOCAL_BANNER_1)
-banner2_url = s3_presigned_url(S3_BANNER_2, LOCAL_BANNER_2)
-active_video = banner1_url if st.session_state.active_banner == 1 else banner2_url
-
-
-# ============================================================
-# DATA
-# ============================================================
-def load_data():
-    df = s3_load_csv(S3_DATA_KEY)
-    if df is not None and not df.empty:
-        return df
-    if os.path.exists(DATA_FILE):
+# --------------------------------------------------------------------------
+# HELPERS
+# --------------------------------------------------------------------------
+def load_staff_data() -> pd.DataFrame:
+    if os.path.exists(CSV_PATH):
         try:
-            return pd.read_csv(DATA_FILE, dtype=str).fillna("")
-        except Exception:
-            pass
-    return pd.DataFrame([
-        {"EmployeeID": "EMP001", "Name": "Ayesha Khan", "Status": "Present",  "RemainingLeaves": "12", "NextOffDay": "Saturday"},
-        {"EmployeeID": "EMP002", "Name": "Bilal Ahmed", "Status": "On Leave", "RemainingLeaves": "5",  "NextOffDay": "Sunday"},
-        {"EmployeeID": "EMP011", "Name": "Usman",       "Status": "Present",  "RemainingLeaves": "20", "NextOffDay": "Friday"},
-    ])
+            df = pd.read_csv(CSV_PATH, dtype=str).fillna("")
+            missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+            if missing:
+                st.error(
+                    f"staff_data.csv is missing required column(s): {', '.join(missing)}. "
+                    f"Required columns: {', '.join(REQUIRED_COLUMNS)}"
+                )
+                return pd.DataFrame(columns=REQUIRED_COLUMNS)
+            return df
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"Could not read staff_data.csv: {exc}")
+            return pd.DataFrame(columns=REQUIRED_COLUMNS)
+    return pd.DataFrame(columns=REQUIRED_COLUMNS)
 
 
-def answer_employee_question(emp, question: str) -> str:
-    q = question.lower()
-    name = emp["Name"]
-    if "leave" in q or "remaining" in q or "vacation" in q:
-        return f"{name}, you have {emp['RemainingLeaves']} remaining leaves."
-    elif "off" in q or "holiday" in q or "weekend" in q:
-        return f"{name}, your next off day is on {emp['NextOffDay']}."
-    elif "status" in q or "present" in q or "absent" in q:
-        return f"{name}, your current status is {emp['Status']}."
-    return f"{name}, status: {emp['Status']}, leaves: {emp['RemainingLeaves']}, next off: {emp['NextOffDay']}."
+def df_to_json_records(df: pd.DataFrame) -> str:
+    records = df.to_dict(orient="records")
+    # Keys used by the JS layer are lowercase / normalized for matching.
+    # "Aliases" is optional: pipe-separated alternate spellings / native-script
+    # names (e.g. "عثمان|Usman|Osman") so the same employee can be recognized
+    # regardless of which language/script they say their name in.
+    cleaned = [
+        {
+            "id": str(r.get("EmployeeID", "")).strip(),
+            "name": str(r.get("Name", "")).strip(),
+            "status": str(r.get("Status", "")).strip(),
+            "leaves": str(r.get("RemainingLeaves", "")).strip(),
+            "nextoff": str(r.get("NextOffDay", "")).strip(),
+            "aliases": [
+                a.strip() for a in str(r.get("Aliases", "")).split("|") if a.strip()
+            ],
+        }
+        for r in records
+    ]
+    return json.dumps(cleaned, ensure_ascii=False)
 
 
-staff_df = load_data()
-
-# Auto reset
-last_act = st.session_state.get("last_interaction")
-if last_act and (time.time() - last_act > RESET_DELAY):
-    st.session_state["kiosk_state"] = "idle"
-    st.session_state["current_employee"] = None
-    st.session_state["last_interaction"] = None
-    st.session_state["last_heard"] = ""
-    st.rerun()
-
-# ============================================================
-# CSS (unchanged from original; system font stack instead of CDN)
-# ============================================================
+# --------------------------------------------------------------------------
+# GLOBAL CSS — strip Streamlit chrome, make the component fill the screen
+# --------------------------------------------------------------------------
 st.markdown(
     """
     <style>
-        #MainMenu, header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], [data-testid="collapsedControl"] {
-            display: none !important;
-            visibility: hidden !important;
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        div.block-container {padding: 0 !important; margin: 0 !important; max-width: 100% !important;}
+        html, body, [data-testid="stAppViewContainer"] {
+            background: #05070c;
+            overflow: hidden;
         }
-
-        html, body, [data-testid="stAppViewContainer"], .stApp {
-            background: #000000 !important;
-            margin: 0 !important; padding: 0 !important;
-            overflow: hidden !important;
-            height: 100vh !important; width: 100vw !important;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        [data-testid="stSidebar"] {
+            background: #0a0d14;
         }
-
-        .main .block-container { padding: 0 !important; margin: 0 !important; max-width: 100vw !important; width: 100vw !important; height: 100vh !important; }
-
-        #kiosk-bg-video { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 0 !important; pointer-events: none !important; }
-
-        .hud-title-wrap { position: fixed; top: 8vh; left: 50%; transform: translateX(-50%); z-index: 30; text-align: center; pointer-events: none; }
-        .hud-pxt-title { font-size: 1.6rem !important; font-weight: 800; letter-spacing: 0.25em; color: #ffffff; text-shadow: 0 0 16px rgba(56,189,248,0.9), 0 0 30px rgba(56,189,248,0.5); text-transform: uppercase; }
-
-        .theme-dot-anchor { position: fixed; top: 20px; right: 25px; width: 16px; height: 16px; background: #38bdf8; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 12px #38bdf8; z-index: 99999; cursor: pointer; display: block; }
-
-        .top-hud { position: fixed; top: 20px; left: 20px; display: flex; align-items: center; gap: 10px; z-index: 999999; background: rgba(10,15,30,0.65); padding: 8px 16px; border-radius: 20px; border: 1px solid rgba(56,189,248,0.3); backdrop-filter: blur(8px); }
-        .dot { width: 12px; height: 12px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 8px #f59e0b, 0 0 16px rgba(245,158,11,0.6); transition: background 0.3s ease, box-shadow 0.3s ease; }
-        .dot.listening { background: #00e5ff !important; box-shadow: 0 0 12px #00e5ff, 0 0 24px #00e5ff !important; animation: dotPulse 1s infinite alternate; }
-        @keyframes dotPulse { from { transform: scale(0.85); opacity: 0.8; } to { transform: scale(1.35); opacity: 1; } }
-        .status-txt { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #fbbf24; text-transform: uppercase; }
-        .status-txt.listening { color: #00e5ff !important; }
-
-        /* Mic picker (startup + always-visible so user can change any time) */
-        .mic-picker { position: fixed; top: 60px; left: 20px; z-index: 999998; background: rgba(10,15,30,0.85); border: 1px solid rgba(56,189,248,0.35); border-radius: 12px; padding: 8px 12px; font-size: 11px; color: #7dd3fc; backdrop-filter: blur(10px); }
-        .mic-picker select { background: #0f172a; color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; padding: 3px 6px; font-size: 11px; max-width: 260px; }
-        .mic-heard { position: fixed; top: 105px; left: 20px; z-index: 999998; background: rgba(15,23,42,0.85); border: 1px solid rgba(125,211,252,0.35); border-radius: 8px; padding: 6px 12px; font-size: 12px; font-family: monospace; color: #7dd3fc; max-width: 400px; }
-        .recog-status { position: fixed; top: 145px; left: 20px; z-index: 999998; background: rgba(15,23,42,0.85); border: 1px solid rgba(125,211,252,0.35); border-radius: 8px; padding: 6px 12px; font-size: 12px; font-family: monospace; color: #fbbf24; max-width: 400px; }
-
-        .hologram-stage { position: fixed; top: 46%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; gap: 48px; z-index: 5; pointer-events: none !important; }
-        .wave-col { display: flex; align-items: center; gap: 6px; height: 130px; }
-        .wave-col span { display: block; width: 5px; height: 18%; border-radius: 3px; background: linear-gradient(180deg, #7dd3fc, #0ea5e9); box-shadow: 0 0 8px rgba(56,189,248,0.7); animation: waveBounce 1.6s ease-in-out infinite; }
-        .wave-col span:nth-child(1) { animation-delay: 0.0s; }
-        .wave-col span:nth-child(2) { animation-delay: 0.15s; }
-        .wave-col span:nth-child(3) { animation-delay: 0.3s; }
-        .wave-col span:nth-child(4) { animation-delay: 0.45s; }
-        .wave-col span:nth-child(5) { animation-delay: 0.3s; }
-        .wave-col span:nth-child(6) { animation-delay: 0.15s; }
-        .wave-col span:nth-child(7) { animation-delay: 0.0s; }
-        .wave-col span:nth-child(8) { animation-delay: 0.2s; }
-        @keyframes waveBounce { 0%,100% { height: 12%; } 50% { height: 90%; } }
-        .hologram-stage.listening .wave-col span { animation-duration: 0.65s; }
-
-        .ai-face { position: relative; width: 190px; height: 190px; display: flex; align-items: center; justify-content: center; }
-        .face-ring { position: absolute; border-radius: 50%; border: 1.5px solid rgba(56,189,248,0.35); animation: ringSpin 7s linear infinite; }
-        .ring-outer { width: 190px; height: 190px; border-color: rgba(56,189,248,0.22); }
-        .ring-mid { width: 148px; height: 148px; border-color: rgba(56,189,248,0.45); animation-direction: reverse; animation-duration: 4.5s; }
-        @keyframes ringSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .hologram-stage.listening .ring-outer, .hologram-stage.listening .ring-mid { animation-duration: 1.6s; }
-
-        .face-core { width: 112px; height: 112px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(186,230,253,0.95), rgba(14,116,144,0.45) 55%, rgba(8,20,35,0.92) 100%); box-shadow: 0 0 30px rgba(56,189,248,0.55), 0 0 60px rgba(56,189,248,0.3), inset 0 0 20px rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; animation: coreGlow 3s ease-in-out infinite; }
-        @keyframes coreGlow { 0%,100% { box-shadow: 0 0 30px rgba(56,189,248,0.5), 0 0 60px rgba(56,189,248,0.25); } 50% { box-shadow: 0 0 46px rgba(56,189,248,0.9), 0 0 92px rgba(56,189,248,0.42); } }
-        .hologram-stage.listening .face-core { animation-duration: 0.9s; }
-        .face-core-inner { width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.95), rgba(224,247,255,0.15) 70%, transparent 100%); filter: drop-shadow(0 0 10px #7dd3fc); }
-
-        #actionPill { position: fixed !important; bottom: 5vh !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 999999999 !important; background: rgba(15,23,42,0.92) !important; border: 1.5px solid rgba(56,189,248,0.6) !important; border-radius: 30px !important; padding: 13px 32px !important; color: #38bdf8 !important; font-size: 15px !important; font-weight: 700 !important; letter-spacing: 0.04em !important; backdrop-filter: blur(12px) !important; box-shadow: 0 8px 30px rgba(0,0,0,0.7) !important; cursor: pointer !important; user-select: none !important; transition: all 0.25s ease !important; display: inline-block !important; }
-        #actionPill:hover { color: #fff !important; border-color: #00e5ff !important; box-shadow: 0 0 24px rgba(0,229,255,0.55) !important; transform: translateX(-50%) scale(1.03) !important; }
-        #actionPill.listening { color: #00e5ff !important; border-color: rgba(0,229,255,0.8) !important; box-shadow: 0 0 22px rgba(0,229,255,0.45) !important; }
-
-        .kiosk-ui-container { position: fixed !important; bottom: 14vh !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 9999999 !important; width: 90% !important; max-width: 480px !important; display: flex !important; flex-direction: column !important; align-items: center !important; gap: 12px !important; }
-        .employee-glass-card { background: rgba(11,15,25,0.88); backdrop-filter: blur(25px); border: 1.5px solid rgba(56,189,248,0.45); border-radius: 18px; padding: 1.1rem 1.4rem; width: 100%; text-align: center; box-shadow: 0 15px 40px rgba(0,0,0,0.8); }
-        .emp-name { font-size: 1.35rem; font-weight: 800; color: #fff; }
-        .emp-badge { color: #38bdf8; font-size: 0.85rem; margin-bottom: 0.7rem; }
-        .emp-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .emp-stat-box { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 0.5rem 0.2rem; }
-        .emp-stat-lbl { font-size: 0.62rem; color: #94a3b8; text-transform: uppercase; }
-        .emp-stat-val { font-size: 1.05rem; font-weight: 700; margin-top: 2px; }
-        .status-present { color: #34d399; }
-        .status-leave { color: #fb923c; }
-
-        div[data-testid="stTextInput"] input { background: rgba(15,23,42,0.9) !important; border: 1.5px solid rgba(56,189,248,0.45) !important; border-radius: 14px !important; color: #fff !important; height: 3rem; text-align: center; }
+        /* Make the kiosk iframe cover the full viewport */
+        iframe[title="st.iframe"], [data-testid="stIFrame"] iframe, iframe {
+            position: fixed !important;
+            top: 0; left: 0;
+            width: 100vw !important;
+            height: 100vh !important;
+            border: none !important;
+            z-index: 1;
+        }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-current_state = st.session_state.get("kiosk_state", "idle")
-current_emp = st.session_state.get("current_employee")
+# --------------------------------------------------------------------------
+# ADMIN PANEL (discreet — collapsed sidebar, password protected)
+# --------------------------------------------------------------------------
+with st.sidebar:
+    st.markdown("### 🔒 PXT Admin")
+    pwd = st.text_input("Admin password", type="password", label_visibility="collapsed",
+                         placeholder="Admin password")
+    if pwd == ADMIN_PASSWORD:
+        st.success("Access granted")
+        st.caption("Upload a replacement staff database (.csv)")
+        uploaded = st.file_uploader("Upload staff_data.csv", type=["csv"], label_visibility="collapsed")
+        if uploaded is not None:
+            try:
+                new_df = pd.read_csv(uploaded, dtype=str).fillna("")
+                missing = [c for c in REQUIRED_COLUMNS if c not in new_df.columns]
+                if missing:
+                    st.error(f"Missing column(s): {', '.join(missing)}")
+                else:
+                    new_df.to_csv(CSV_PATH, index=False)
+                    st.success("Database updated. Reloading kiosk...")
+                    st.rerun()
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"Failed to process file: {exc}")
 
-pill_initial_text = 'Say "Hi PXT" or Click here' if current_state == "idle" else 'Speak or Type below'
+        st.divider()
+        st.caption("Current records")
+        st.dataframe(load_staff_data(), use_container_width=True, height=300)
+    elif pwd:
+        st.error("Incorrect password")
 
-video_source_html = f'<source src="{active_video}" type="video/mp4">' if active_video else ""
+# --------------------------------------------------------------------------
+# LOAD DATA
+# --------------------------------------------------------------------------
+staff_df = load_staff_data()
+staff_json = df_to_json_records(staff_df)
 
-# Render Background, Hologram, Pill, Mic Picker, Heard box
-st.markdown(
-    f"""
-    <video id="kiosk-bg-video" autoplay loop muted playsinline>
-        {video_source_html}
-    </video>
-
-    <div class="hud-title-wrap"><div class="hud-pxt-title">{APP_TITLE}</div></div>
-    <a href="?switch_banner=true" target="_self" class="theme-dot-anchor" title="Switch Theme"></a>
-
-    <div id="topHud" class="top-hud">
-        <div id="micDot" class="dot"></div>
-        <div id="statusLabel" class="status-txt">STANDBY</div>
-    </div>
-
-    <div class="mic-picker">
-        Mic: <select id="micDeviceSelect"><option value="">Detecting...</option></select>
-    </div>
-    <div id="micHeard" class="mic-heard">HEARD: (waiting for speech)</div>
-    <div id="recogStatus" class="recog-status">RECOGNITION: starting…</div>
-
-    <div id="hologramStage" class="hologram-stage">
-        <div class="wave-col wave-left"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-        <div class="ai-face">
-            <div class="face-ring ring-outer"></div>
-            <div class="face-ring ring-mid"></div>
-            <div class="face-core"><div class="face-core-inner"></div></div>
-        </div>
-        <div class="wave-col wave-right"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-    </div>
-
-    <div id="actionPill">{pill_initial_text}</div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ============================================================
-# JS BRIDGE — RESTORED FROM ORIGINAL WORKING BUILD
-# Only diff: sendPayload uses parent-DOM <a> click (sandbox-safe)
-# ============================================================
-speak_text = ""
-if current_state == "asked_badge" and not st.session_state.get("last_heard"):
-    speak_text = "Please say or enter your badge number."
-elif current_state == "employee_active" and current_emp is not None and not st.session_state.get("last_heard"):
-    speak_text = f"Welcome {current_emp['Name']}. How can I assist you today?"
-
-js_state_json = json.dumps(current_state)
-js_speak_json = json.dumps(speak_text)
-
-js_code = """
-<script>
-(function() {
-    try {
-        const pdoc = window.parent.document;
-        const dot = pdoc.getElementById('micDot');
-        const statusLabel = pdoc.getElementById('statusLabel');
-        const hologramStage = pdoc.getElementById('hologramStage');
-        const actionPill = pdoc.getElementById('actionPill');
-        const micSelect = pdoc.getElementById('micDeviceSelect');
-        const micHeard = pdoc.getElementById('micHeard');
-        const recogStatus = pdoc.getElementById('recogStatus');
-
-        const currentKioskState = %CURRENT_STATE%;
-        const textToSay = %SPEAK_TEXT%;
-
-        let isSpeaking = false;
-        let isTriggered = false;
-        let selectedDeviceId = pdoc.defaultView.localStorage.getItem('pxt_mic_device') || '';
-
-        // Sandbox-safe navigation via parent-DOM link click
-        function sendPayload(val) {
-            if (isTriggered) return;
-            isTriggered = true;
-            let link = pdoc.getElementById('pxt-nav-link');
-            if (!link) {
-                link = pdoc.createElement('a');
-                link.id = 'pxt-nav-link';
-                link.style.display = 'none';
-                pdoc.body.appendChild(link);
-            }
-            const u = new URL(window.parent.location.href);
-            u.searchParams.set('voice_payload', val);
-            link.href = u.href;
-            link.click();
-        }
-
-        if (actionPill) {
-            actionPill.onclick = function() {
-                if (currentKioskState === 'idle') sendPayload('WAKE');
-                else startAudioEngine();
-            };
-        }
-
-        function updateUI(listening, customText) {
-            if (!dot || !statusLabel || !hologramStage) return;
-            if (listening) {
-                dot.className = 'dot listening';
-                statusLabel.className = 'status-txt listening';
-                statusLabel.innerText = 'LISTENING';
-                hologramStage.classList.add('listening');
-                if (actionPill) {
-                    actionPill.classList.add('listening');
-                    if (customText) actionPill.innerText = customText;
-                }
-            } else {
-                dot.className = 'dot';
-                statusLabel.className = 'status-txt';
-                statusLabel.innerText = 'STANDBY';
-                hologramStage.classList.remove('listening');
-                if (actionPill) {
-                    actionPill.classList.remove('listening');
-                    if (currentKioskState === 'idle') actionPill.innerText = 'Say "Hi PXT" or Click here';
-                }
-            }
-        }
-
-        // Populate mic list once permission is granted
-        function populateMicList() {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-            navigator.mediaDevices.enumerateDevices().then(function(devs) {
-                if (!micSelect) return;
-                const mics = devs.filter(function(d){return d.kind==='audioinput';});
-                let html = '';
-                mics.forEach(function(m){
-                    const label = m.label || ('Mic ' + m.deviceId.substring(0,6));
-                    const sel = (m.deviceId === selectedDeviceId) ? ' selected' : '';
-                    html += '<option value="' + m.deviceId + '"' + sel + '>' + label + '</option>';
-                });
-                micSelect.innerHTML = html || '<option value="">No mic</option>';
-                if (!selectedDeviceId && mics.length > 0) {
-                    selectedDeviceId = mics[0].deviceId;
-                    pdoc.defaultView.localStorage.setItem('pxt_mic_device', selectedDeviceId);
-                }
-            });
-        }
-        if (micSelect) {
-            micSelect.onchange = function() {
-                selectedDeviceId = micSelect.value;
-                pdoc.defaultView.localStorage.setItem('pxt_mic_device', selectedDeviceId);
-                window.parent.location.reload();
-            };
-        }
-
-        // ---- Hardware Audio Stream Meter (ORIGINAL WORKING) ----
-        function startAudioEnergyMeter() {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
-            // Force the user-picked mic via deviceId (Chrome ignores its own setting here).
-            // This also "primes" Chrome's default so SpeechRecognition uses the same mic.
-            const audioConstraint = selectedDeviceId
-                ? { deviceId: { exact: selectedDeviceId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-                : true;
-            navigator.mediaDevices.getUserMedia({ audio: audioConstraint, video: false })
-                .then(stream => {
-                    updateUI(true, 'Say "Hi PXT" or Click here');
-                    populateMicList();
-                    // DEBUG: log which mic Chrome actually chose (should match Windows default)
-                    try {
-                        const t = stream.getAudioTracks()[0];
-                        console.log('=== ACTUAL MIC IN USE: ' + t.label + ' ===');
-                        if (micHeard) micHeard.innerText = 'USING: ' + t.label + '  (speak now)';
-                    } catch(e) {}
-                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    const source = audioCtx.createMediaStreamSource(stream);
-                    const analyser = audioCtx.createAnalyser();
-                    analyser.fftSize = 256;
-                    source.connect(analyser);
-
-                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-                    function checkAudio() {
-                        if (isSpeaking || isTriggered) {
-                            requestAnimationFrame(checkAudio);
-                            return;
-                        }
-                        analyser.getByteFrequencyData(dataArray);
-                        let sum = 0, peak = 0;
-                        for (let i = 0; i < dataArray.length; i++) { sum += dataArray[i]; if (dataArray[i] > peak) peak = dataArray[i]; }
-                        const average = sum / dataArray.length;
-
-                        // Live mic-level indicator so user can SEE if audio is flowing
-                        if (micHeard && !window._pxtLastHeardText) {
-                            const bars = Math.min(15, Math.floor(peak / 8));
-                            const bar = '#'.repeat(bars) + '-'.repeat(15 - bars);
-                            const t = stream.getAudioTracks()[0];
-                            const label = (t && t.label) ? t.label.substring(0, 30) : '?';
-                            micHeard.innerText = 'MIC(' + label + '): [' + bar + ']';
-                            micHeard.style.color = peak > 20 ? '#34d399' : '#7dd3fc';
-                        }
-
-                        if (average > 25) {
-                            if (currentKioskState === 'idle') {
-                                if (actionPill) actionPill.innerText = "Voice Detected... Activating!";
-                                setTimeout(() => sendPayload('WAKE'), 300);
-                                return;
-                            }
-                        }
-                        requestAnimationFrame(checkAudio);
-                    }
-                    checkAudio();
-                })
-                .catch(err => {
-                    console.log('Microphone access denied:', err);
-                    if (statusLabel) statusLabel.innerText = 'MIC BLOCKED';
-                    if (actionPill) actionPill.innerText = 'Allow Microphone in Browser';
-                });
-        }
-
-        // ---- Speech Recognition (ORIGINAL WORKING) ----
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition = null;
-
-        if (SpeechRecognition) {
-            recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = 'en-US';
-
-            recognition.onresult = function(event) {
-                if (isSpeaking || isTriggered) return;
-
-                let liveText = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    liveText += event.results[i][0].transcript;
-                }
-                liveText = liveText.trim();
-                const lower = liveText.toLowerCase();
-
-                if (liveText.length > 0) {
-                    window._pxtLastHeardText = true;  // stop overwriting HEARD with the meter
-                    if (actionPill) actionPill.innerText = 'Heard: "' + liveText + '"';
-                    if (micHeard) { micHeard.innerText = 'HEARD: ' + liveText; micHeard.style.color = '#34d399'; }
-                    if (recogStatus) { recogStatus.innerText = 'RECOGNITION: OK — words received ✔'; recogStatus.style.color = '#34d399'; }
-                }
-
-                if (currentKioskState === 'idle') {
-                    const clean = lower.replace(/[^a-z0-9]/g, '');
-                    if (clean.includes('pxt') || clean.includes('hi') || clean.includes('hello') || clean.includes('wake')) {
-                        sendPayload('WAKE');
-                    }
-                } else if (liveText.length > 1) {
-                    sendPayload(liveText);
-                }
-            };
-
-            recognition.onstart = function() {
-                if (recogStatus) { recogStatus.innerText = 'RECOGNITION: listening…'; recogStatus.style.color = '#7dd3fc'; }
-            };
-
-            recognition.onaudiostart = function() {
-                if (recogStatus) { recogStatus.innerText = 'RECOGNITION: audio detected — analyzing…'; recogStatus.style.color = '#38bdf8'; }
-            };
-
-            recognition.onspeechstart = function() {
-                if (recogStatus) { recogStatus.innerText = 'RECOGNITION: speech detected! processing…'; recogStatus.style.color = '#a78bfa'; }
-            };
-
-            recognition.onspeechend = function() {
-                if (recogStatus && !window._pxtLastHeardText) { recogStatus.innerText = 'RECOGNITION: speech ended, waiting on transcript…'; recogStatus.style.color = '#a78bfa'; }
-            };
-
-            // Counts consecutive no-speech errors so we can tell you when it's
-            // not a fluke — i.e. the recognizer genuinely never hears you.
-            window._pxtNoSpeechStreak = window._pxtNoSpeechStreak || 0;
-
-            recognition.onerror = function(e) {
-                console.log('Recognition status:', e.error);
-                if (!recogStatus) return;
-                if (e.error === 'no-speech') {
-                    window._pxtNoSpeechStreak++;
-                    const hint = window._pxtNoSpeechStreak >= 3
-                        ? ' — mic bar working but this stays empty? Recognition is on a DIFFERENT device than the meter. Fix in Windows Sound settings: set the headset as BOTH Default Device AND Default Communication Device.'
-                        : '';
-                    recogStatus.innerText = 'RECOGNITION: no-speech (' + window._pxtNoSpeechStreak + 'x)' + hint;
-                    recogStatus.style.color = '#f59e0b';
-                } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-                    recogStatus.innerText = 'RECOGNITION: blocked — mic permission denied for speech (' + e.error + ')';
-                    recogStatus.style.color = '#f87171';
-                } else if (e.error === 'network') {
-                    recogStatus.innerText = 'RECOGNITION: network error — this needs internet access to Google\\'s speech service';
-                    recogStatus.style.color = '#f87171';
-                } else if (e.error === 'audio-capture') {
-                    recogStatus.innerText = 'RECOGNITION: audio-capture — no mic hardware found by the recognizer';
-                    recogStatus.style.color = '#f87171';
-                } else {
-                    recogStatus.innerText = 'RECOGNITION: error — ' + e.error;
-                    recogStatus.style.color = '#f87171';
-                }
-            };
-
-            recognition.onend = function() {
-                if (!isSpeaking && !isTriggered && !window._pxtRestarting) {
-                    window._pxtRestarting = true;
-                    // Delay avoids slamming Chrome with instant restarts, which
-                    // can cause an infinite start/end loop and repeated mic
-                    // permission prompts instead of ever actually listening.
-                    setTimeout(function() {
-                        window._pxtRestarting = false;
-                        if (!isSpeaking && !isTriggered) {
-                            try { recognition.start(); } catch(e) {}
-                        }
-                    }, 400);
-                }
-            };
-        } else {
-            if (recogStatus) { recogStatus.innerText = 'RECOGNITION: not supported in this browser'; recogStatus.style.color = '#f87171'; }
-        }
-
-        function startAudioEngine() {
-            startAudioEnergyMeter();
-            if (recognition) {
-                try { recognition.start(); } catch(e) {}
-            }
-        }
-
-        // TTS then engine
-        if (textToSay && 'speechSynthesis' in window) {
-            isSpeaking = true;
-            window.speechSynthesis.cancel();
-            const ut = new SpeechSynthesisUtterance(textToSay);
-            ut.rate = 0.95;
-            ut.onend = function() { isSpeaking = false; startAudioEngine(); };
-            ut.onerror = function() { isSpeaking = false; startAudioEngine(); };
-            window.speechSynthesis.speak(ut);
-        } else {
-            startAudioEngine();
-        }
-
-    } catch(err) {
-        console.log('Audio Bridge error:', err);
+# --------------------------------------------------------------------------
+# KIOSK HTML/JS COMPONENT
+# --------------------------------------------------------------------------
+KIOSK_HTML = r"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    * { box-sizing: border-box; }
+    html, body {
+        margin: 0; padding: 0; width: 100%; height: 100%;
+        background: #05070c;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        overflow: hidden;
     }
-})();
-</script>
-""".replace("%CURRENT_STATE%", js_state_json).replace("%SPEAK_TEXT%", js_speak_json)
 
-components.html(js_code, height=1)
+    .kiosk-wrap {
+        position: relative;
+        width: 100vw; height: 100vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
 
-# Bottom deck
-st.markdown('<div class="kiosk-ui-container">', unsafe_allow_html=True)
+    /* Animated dark tech background (works with zero external assets).
+       If VIDEO_SRC is provided, a looping <video> is layered underneath instead. */
+    .bg-video {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        object-fit: cover;
+        z-index: 0;
+        opacity: 0.85;
+    }
+    .bg-fallback {
+        position: absolute; inset: 0;
+        z-index: 0;
+        background:
+            radial-gradient(circle at 20% 30%, rgba(0,180,255,0.15), transparent 45%),
+            radial-gradient(circle at 80% 70%, rgba(0,255,200,0.12), transparent 45%),
+            linear-gradient(120deg, #05070c, #0a0f1a 40%, #05070c 100%);
+        background-size: 200% 200%;
+        animation: bgshift 18s ease-in-out infinite;
+    }
+    @keyframes bgshift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    .grid-overlay {
+        position: absolute; inset: 0; z-index: 0;
+        background-image:
+            linear-gradient(rgba(0,220,255,0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,220,255,0.05) 1px, transparent 1px);
+        background-size: 42px 42px;
+        mask-image: radial-gradient(circle at 50% 40%, black 10%, transparent 75%);
+    }
+    .scrim {
+        position: absolute; inset: 0; z-index: 1;
+        background: radial-gradient(circle at 50% 45%, rgba(5,7,12,0.15), rgba(5,7,12,0.85) 75%);
+    }
 
-if current_state == "asked_badge":
-    badge_in = st.text_input("badge_in", placeholder="Enter Badge ID (e.g. EMP011) or speak", label_visibility="collapsed")
-    active_input = st.session_state.get("last_heard") or badge_in
-    if active_input and active_input != "WAKE":
-        q = active_input.strip().lower().replace(" ", "").replace("-", "")
-        match = staff_df[staff_df["EmployeeID"].str.lower().str.replace(" ", "") == q]
-        if match.empty:
-            match = staff_df[staff_df["Name"].str.lower().str.contains(active_input.strip().lower())]
-        if not match.empty:
-            st.session_state["current_employee"] = match.iloc[0]
-            st.session_state["kiosk_state"] = "employee_active"
-            st.session_state["last_heard"] = ""
-            st.session_state["last_interaction"] = time.time()
-            st.rerun()
-        elif badge_in:
-            st.error("Badge ID not recognized. Please try again.")
+    .brand {
+        position: relative; z-index: 2;
+        color: #e8f6ff;
+        letter-spacing: 6px;
+        font-size: 18px;
+        font-weight: 600;
+        opacity: 0.75;
+        margin-bottom: 26px;
+        text-transform: uppercase;
+    }
 
-elif current_state == "employee_active":
-    emp = st.session_state.get("current_employee")
-    status_cls = "status-present" if "present" in emp["Status"].lower() else "status-leave"
-    st.markdown(
-        f"""
-        <div class="employee-glass-card">
-            <div class="emp-name">{emp['Name']}</div>
-            <div class="emp-badge">BADGE ID: {emp['EmployeeID']}</div>
-            <div class="emp-stats-grid">
-                <div class="emp-stat-box">
-                    <div class="emp-stat-lbl">STATUS</div>
-                    <div class="emp-stat-val {status_cls}">{emp['Status']}</div>
-                </div>
-                <div class="emp-stat-box">
-                    <div class="emp-stat-lbl">LEAVES LEFT</div>
-                    <div class="emp-stat-val">{emp['RemainingLeaves']}</div>
-                </div>
-                <div class="emp-stat-box">
-                    <div class="emp-stat-lbl">NEXT OFF</div>
-                    <div class="emp-stat-val">{emp['NextOffDay']}</div>
-                </div>
+    .spacer { height: 6vh; }
+
+    .result-card {
+        position: relative; z-index: 2;
+        width: min(560px, 88vw);
+        background: rgba(15, 22, 34, 0.72);
+        border: 1px solid rgba(90, 210, 255, 0.25);
+        border-radius: 22px;
+        padding: 28px 34px;
+        backdrop-filter: blur(14px);
+        color: #eaf6ff;
+        text-align: center;
+        display: none;
+        box-shadow: 0 0 40px rgba(0,150,255,0.15);
+    }
+    .result-card.show { display: block; animation: fadein .35s ease; }
+    @keyframes fadein { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: translateY(0);} }
+    .result-name { font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+    .result-id { font-size: 13px; letter-spacing: 2px; color: #7fd8ff; opacity: 0.8; margin-bottom: 18px; text-transform: uppercase; }
+    .result-grid { display: flex; justify-content: space-around; gap: 12px; flex-wrap: wrap; }
+    .result-item { min-width: 120px; }
+    .result-item .label { font-size: 11px; letter-spacing: 1.5px; color: #8fb8cf; text-transform: uppercase; margin-bottom: 6px; }
+    .result-item .value { font-size: 19px; font-weight: 600; }
+    .status-present { color: #4dffb0; }
+    .status-absent  { color: #ff6767; }
+    .status-other   { color: #ffd166; }
+
+    .pill {
+        position: fixed;
+        bottom: 46px; left: 50%;
+        transform: translateX(-50%);
+        z-index: 3;
+        display: flex; flex-direction: column; align-items: center;
+        gap: 6px;
+        padding: 14px 34px;
+        border-radius: 999px;
+        background: rgba(10, 16, 26, 0.65);
+        border: 1px solid rgba(80, 200, 255, 0.35);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 0 22px rgba(0, 190, 255, 0.35), inset 0 0 12px rgba(0,190,255,0.08);
+        animation: glow 2.4s ease-in-out infinite;
+        text-align: center;
+        max-width: 90vw;
+    }
+    @keyframes glow {
+        0%, 100% { box-shadow: 0 0 18px rgba(0,190,255,0.28), inset 0 0 10px rgba(0,190,255,0.06); }
+        50%      { box-shadow: 0 0 34px rgba(0,190,255,0.55), inset 0 0 16px rgba(0,190,255,0.12); }
+    }
+    .pill .line1 { color: #dff5ff; font-size: 15px; font-weight: 600; letter-spacing: 0.4px; }
+    .pill .line2 { color: #7fd0ef; font-size: 12.5px; letter-spacing: 0.3px; opacity: 0.85; }
+
+    .mic-dot {
+        position: fixed; top: 22px; right: 26px; z-index: 3;
+        width: 10px; height: 10px; border-radius: 50%;
+        background: #ff5b5b;
+        box-shadow: 0 0 10px rgba(255,80,80,0.8);
+    }
+    .mic-dot.on { background: #46ffb0; box-shadow: 0 0 10px rgba(70,255,176,0.9); }
+
+    .debug-caption {
+        position: fixed;
+        top: 22px; left: 50%; transform: translateX(-50%);
+        z-index: 3;
+        color: #7fd0ef;
+        font-size: 13px;
+        letter-spacing: 0.3px;
+        background: rgba(10,16,26,0.55);
+        padding: 6px 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(80,200,255,0.2);
+        max-width: 80vw;
+        text-align: center;
+        opacity: 0.85;
+        min-height: 14px;
+    }
+</style>
+</head>
+<body>
+<div class="kiosk-wrap">
+    <video class="bg-video" id="bgVideo" autoplay muted loop playsinline style="display:none;"></video>
+    <div class="bg-fallback"></div>
+    <div class="grid-overlay"></div>
+    <div class="scrim"></div>
+
+    <div class="mic-dot" id="micDot" title="Microphone status"></div>
+    <div class="debug-caption" id="debugCaption">&nbsp;</div>
+
+    <div class="brand">PXT&nbsp;HUB</div>
+
+    <div class="spacer"></div>
+
+    <div class="result-card" id="resultCard">
+        <div class="result-name" id="rName">—</div>
+        <div class="result-id" id="rId">—</div>
+        <div class="result-grid">
+            <div class="result-item">
+                <div class="label">Status</div>
+                <div class="value" id="rStatus">—</div>
+            </div>
+            <div class="result-item">
+                <div class="label">Leaves Left</div>
+                <div class="value" id="rLeaves">—</div>
+            </div>
+            <div class="result-item">
+                <div class="label">Next Off Day</div>
+                <div class="value" id="rNext">—</div>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    q_box = st.text_input("ask_q", placeholder="Ask a question or speak", label_visibility="collapsed")
-    active_q = st.session_state.get("last_heard") or q_box
-    if active_q and active_q != "WAKE":
-        st.session_state["last_interaction"] = time.time()
-        ans = answer_employee_question(emp, active_q)
-        st.session_state["last_heard"] = ""
-        st.success(ans)
+    </div>
 
-st.markdown('</div>', unsafe_allow_html=True)
+    <div class="pill">
+        <div class="line1" id="pillLine1">I am your PXT AI Assistant</div>
+        <div class="line2" id="pillLine2">Say "Hi PXT" to start...</div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const STAFF = __STAFF_DATA_JSON__;
+    const VIDEO_SRC = "__VIDEO_SRC__"; // optional: set a URL/path to a looping mp4 for a richer background
+
+    const micDot = document.getElementById('micDot');
+    const pillLine1 = document.getElementById('pillLine1');
+    const pillLine2 = document.getElementById('pillLine2');
+    const resultCard = document.getElementById('resultCard');
+    const rName = document.getElementById('rName');
+    const rId = document.getElementById('rId');
+    const rStatus = document.getElementById('rStatus');
+    const rLeaves = document.getElementById('rLeaves');
+    const rNext = document.getElementById('rNext');
+    const bgVideo = document.getElementById('bgVideo');
+    const debugCaption = document.getElementById('debugCaption');
+
+    // The video plays through the kiosk speakers and bleeds back into the mic,
+    // which corrupts wake-word / name recognition. Keeping volume moderate (not
+    // full blast) is the single biggest fix for that — it's an acoustic problem,
+    // not something code alone can fully cancel. Adjust this if needed.
+    const IDLE_VIDEO_VOLUME = 0.35;      // while waiting for "Hi PXT"
+    const LISTENING_VIDEO_VOLUME = 0.12; // ducked further while capturing name/login
+    bgVideo.volume = IDLE_VIDEO_VOLUME;
+
+    if (VIDEO_SRC && VIDEO_SRC.trim() !== "") {
+        bgVideo.src = VIDEO_SRC;
+        bgVideo.style.display = "block";
+        const fallback = document.querySelector('.bg-fallback');
+        bgVideo.addEventListener('playing', function () {
+            if (fallback) fallback.style.display = "none";
+        });
+    }
+
+    // ---- Multilingual configuration -----------------------------------
+    // Wake word ("Hi PXT") is always listened for in English — like "Hey Siri"
+    // or "Alexa", a short fixed brand phrase is kept in one language everywhere,
+    // regardless of what language the employee speaks afterwards.
+    const WAKE_LANG = "en-US";
+
+    // After the wake word, the kiosk cycles through these languages to capture
+    // the employee's name/login, a few seconds each, until one of them matches.
+    // Add/remove/reorder languages here as needed.
+    const LANGUAGES = [
+        { code: "en-US", label: "English",   prompt: "Kindly tell me your login or name.",
+          reply: (n,s,l,d) => `Hello ${n}. Your status is ${s}. You have ${l} leaves remaining. Your next off day is ${d}.`,
+          sorry: "Sorry, I could not find your record. Please try again." },
+        { code: "ur-PK", label: "Urdu",      prompt: "براہ مہربانی اپنا نام یا لاگ ان بتائیں۔",
+          reply: (n,s,l,d) => `السلام علیکم ${n}۔ آپ کی حاضری کی صورتحال ${s} ہے۔ آپ کی ${l} چھٹیاں باقی ہیں۔ آپ کی اگلی چھٹی کا دن ${d} ہے۔`,
+          sorry: "معذرت، آپ کا ریکارڈ نہیں ملا۔ دوبارہ کوشش کریں۔" },
+        { code: "hi-IN", label: "Hindi",     prompt: "कृपया अपना नाम या लॉगिन बताएं।",
+          reply: (n,s,l,d) => `नमस्ते ${n}। आपकी स्थिति ${s} है। आपकी ${l} छुट्टियाँ शेष हैं। आपका अगला अवकाश दिन ${d} है।`,
+          sorry: "क्षमा करें, आपका रिकॉर्ड नहीं मिला। कृपया पुनः प्रयास करें।" },
+        { code: "ta-IN", label: "Tamil",     prompt: "தயவுசெய்து உங்கள் பெயர் அல்லது லாகின் சொல்லுங்கள்.",
+          reply: (n,s,l,d) => `வணக்கம் ${n}. உங்கள் நிலை ${s}. உங்களுக்கு ${l} விடுப்பு மீதம் உள்ளது. உங்கள் அடுத்த ஓய்வு நாள் ${d}.`,
+          sorry: "மன்னிக்கவும், உங்கள் பதிவு கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்." },
+        { code: "ml-IN", label: "Malayalam", prompt: "ദയവായി നിങ്ങളുടെ പേര് അല്ലെങ്കിൽ ലോഗിൻ പറയൂ.",
+          reply: (n,s,l,d) => `ഹലോ ${n}. നിങ്ങളുടെ സ്ഥിതി ${s} ആണ്. നിങ്ങൾക്ക് ${l} അവധി ദിനങ്ങൾ ബാക്കിയുണ്ട്. നിങ്ങളുടെ അടുത്ത അവധി ദിവസം ${d} ആണ്.`,
+          sorry: "ക്ഷമിക്കണം, നിങ്ങളുടെ റെക്കോർഡ് കണ്ടെത്താനായില്ല. വീണ്ടും ശ്രമിക്കുക." },
+        { code: "am-ET", label: "Amharic",   prompt: "እባክዎ ስምዎን ወይም መግቢያዎን ይንገሩኝ።",
+          reply: (n,s,l,d) => `ሰላም ${n}። ሁኔታዎ ${s} ነው። ${l} ቀሪ የእረፍት ቀናት አሉዎት። ቀጣዩ የእረፍት ቀንዎ ${d} ነው።`,
+          sorry: "ይቅርታ፣ መዝገብዎ አልተገኘም። እባክዎ ደግመው ይሞክሩ።" },
+        { code: "yo-NG", label: "Yoruba",    prompt: "Jọwọ sọ orukọ tabi login rẹ fun mi.",
+          reply: (n,s,l,d) => `Bawo ni ${n}. Ipo rẹ ni ${s}. O ni ọjọ isinmi ${l} to ku. Ọjọ isinmi rẹ to nbọ ni ${d}.`,
+          sorry: "Ma binu, mi ò rí àkọsílẹ̀ rẹ. Jọwọ tún gbìyànjú." },
+        { code: "ha-NG", label: "Hausa",     prompt: "Don Allah gaya mini sunanka ko shiga.",
+          reply: (n,s,l,d) => `Sannu ${n}. Matsayin ku shine ${s}. Kuna da hutu ${l} da suka rage. Ranar hutunku ta gaba shine ${d}.`,
+          sorry: "Yi hakuri, ban sami bayanan ku ba. Don Allah a sake gwadawa." },
+        { code: "ig-NG", label: "Igbo",      prompt: "Biko gwa m aha gị ma ọ bụ nbanye gị.",
+          reply: (n,s,l,d) => `Ndewo ${n}. Ọnọdụ gị bụ ${s}. I nwere ezumike ${l} fọdụrụ. Ụbọchị izu ike gị na-abịa bụ ${d}.`,
+          sorry: "Ndo, achọtaghị ndekọ gị. Biko nwaa ọzọ." },
+        { code: "lg-UG", label: "Luganda",   prompt: "Nsaba mumbulire erinnya lyo oba login yo.",
+          reply: (n,s,l,d) => `Ki kati ${n}. Embeera yo eri ${s}. Olina ${l} ez'okuwummula ezisigadde. Olunaku lwo olw'okuwummula oluddako lwe ${d}.`,
+          sorry: "Nsonyiwa, sisobodde kufuna ndagiriro yo. Ddamu ogezeeko." }
+    ];
+    // NOTE: All non-English phrases above are best-effort machine translations
+    // for this demo/testing build. Have native speakers review and correct
+    // them before real deployment — accuracy is lowest for Yoruba, Hausa,
+    // Igbo and Luganda. Also: the browser's underlying speech engine (Google's
+    // cloud speech service in Chrome) may not actually support recognition
+    // for every one of these languages/dialects. If a language's "Heard: ..."
+    // caption never updates no matter how clearly someone speaks, that
+    // language likely isn't supported for recognition on this browser —
+    // its lang code may need to be swapped for a closer regional variant.
+
+    let state = "idle"; // idle | awaiting_id | result
+    let nameRecognition = null;
+    let nameCycleTimer = null;
+    let nameCycleDeadline = 0;
+
+    function setPill(line1, line2) {
+        pillLine1.textContent = line1;
+        pillLine2.textContent = line2;
+    }
+
+    function speak(text, lang, onend) {
+        try {
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.rate = 1.0;
+            utter.pitch = 1.0;
+            utter.lang = lang || "en-US";
+            if (onend) utter.onend = onend;
+            window.speechSynthesis.speak(utter);
+        } catch (e) { /* speech synthesis unsupported */ }
+    }
+
+    // Unicode-aware normalize: keeps letters/numbers from ANY script (Latin,
+    // Arabic, Devanagari, Ethiopic, etc.) instead of stripping everything down
+    // to a-z0-9, which used to silently break non-English matching.
+    function normalize(s) {
+        return (s || "").toLowerCase().trim()
+            .replace(/[^\p{L}\p{N}\s]/gu, "")
+            .replace(/\s+/g, " ");
+    }
+
+    function findStaff(transcript) {
+        const t = normalize(transcript);
+        const tNoSpace = t.replace(/\s+/g, "");
+        if (!t) return null;
+
+        // 1) Employee ID match (e.g. "emp001")
+        for (const s of STAFF) {
+            const idNorm = normalize(s.id).replace(/\s+/g, "");
+            if (idNorm && (tNoSpace.includes(idNorm) || idNorm.includes(tNoSpace))) return s;
+        }
+        // 2) Full name match (Latin "Name" column)
+        for (const s of STAFF) {
+            const nameNorm = normalize(s.name);
+            if (nameNorm && t.includes(nameNorm)) return s;
+        }
+        // 3) Alias match — native-script / alternate-spelling names
+        for (const s of STAFF) {
+            for (const alias of (s.aliases || [])) {
+                const aliasNorm = normalize(alias);
+                if (aliasNorm && t.includes(aliasNorm)) return s;
+            }
+        }
+        // 4) Partial / token match on the Latin name (all tokens present)
+        for (const s of STAFF) {
+            const tokens = normalize(s.name).split(" ").filter(Boolean);
+            if (tokens.length && tokens.every(tok => t.includes(tok))) return s;
+        }
+        return null;
+    }
+
+    function statusClass(status) {
+        const s = (status || "").toLowerCase();
+        if (s.includes("present")) return "status-present";
+        if (s.includes("absent")) return "status-absent";
+        return "status-other";
+    }
+
+    function showResult(staff, langCfg) {
+        state = "result";
+        resultCard.classList.add("show");
+        rName.textContent = staff.name;
+        rId.textContent = staff.id;
+        rStatus.textContent = staff.status || "—";
+        rStatus.className = "value " + statusClass(staff.status);
+        rLeaves.textContent = staff.leaves || "—";
+        rNext.textContent = staff.nextoff || "—";
+
+        setPill("Here is your update, " + staff.name.split(" ")[0], "Resetting shortly...");
+
+        const cfg = langCfg || LANGUAGES[0];
+        const sentence = cfg.reply(staff.name, staff.status, staff.leaves, staff.nextoff);
+        speak(sentence, cfg.code);
+
+        clearTimeout(resetTimer);
+        resetTimer = setTimeout(resetToIdle, 8000);
+    }
+
+    function resetToIdle() {
+        state = "idle";
+        bgVideo.volume = IDLE_VIDEO_VOLUME;
+        resultCard.classList.remove("show");
+        setPill("I am your PXT AI Assistant", "Say \"Hi PXT\" to start...");
+        stopNameCapture();
+        try { wakeRecognition.start(); } catch (e) { /* already running */ }
+    }
+
+    // ---- Wake-word listener (always English, always on while idle) -------
+    let wakeRecognition = null;
+    let shouldRun = true;
+    let resetTimer = null;
+    let lastResultAt = Date.now();
+    let watchdog = null;
+
+    function isWakeWord(t) {
+        const hasGreeting = /\b(hi|high|hey|hai)\b/.test(t);
+        const hasPX = /\bp\s?x\s?[a-z]{0,3}\b/.test(t) || t.replace(/\s+/g, "").includes("px");
+        return hasGreeting && hasPX;
+    }
+
+    function initWakeRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            setPill("Voice not supported", "Please use Chrome or Edge browser");
+            return;
+        }
+        wakeRecognition = new SpeechRecognition();
+        wakeRecognition.continuous = true;
+        wakeRecognition.interimResults = true;
+        wakeRecognition.lang = WAKE_LANG;
+        wakeRecognition.maxAlternatives = 1;
+
+        wakeRecognition.onstart = function () {
+            micDot.classList.add("on");
+            if (state === "idle") debugCaption.textContent = "Listening... say \"Hi PXT\"";
+        };
+        wakeRecognition.onend = function () {
+            micDot.classList.remove("on");
+            if (shouldRun && state === "idle") {
+                setTimeout(function () {
+                    try { wakeRecognition.start(); } catch (e) { /* already started */ }
+                }, 250);
+            }
+        };
+        wakeRecognition.onerror = function (e) {
+            micDot.classList.remove("on");
+            if (state === "idle") debugCaption.textContent = "mic error: " + e.error;
+        };
+        wakeRecognition.onresult = function (event) {
+            if (state !== "idle") return;
+            lastResultAt = Date.now();
+            let liveText = "";
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                liveText += event.results[i][0].transcript;
+            }
+            debugCaption.textContent = "Heard: " + liveText;
+
+            const last = event.results[event.results.length - 1];
+            if (last.isFinal && isWakeWord(normalize(last[0].transcript))) {
+                try { wakeRecognition.stop(); } catch (e) {}
+                startLanguageSelection();
+            }
+        };
+
+        try { wakeRecognition.start(); } catch (e) { /* ignore */ }
+
+        clearInterval(watchdog);
+        watchdog = setInterval(function () {
+            if (state === "idle" && Date.now() - lastResultAt > 12000) {
+                debugCaption.textContent = "No audio detected — restarting mic...";
+                try { wakeRecognition.stop(); } catch (e) {}
+                try { wakeRecognition.abort(); } catch (e) {}
+                lastResultAt = Date.now();
+            }
+        }, 4000);
+    }
+
+    function stopNameCapture() {
+        clearTimeout(nameCycleTimer);
+        if (nameRecognition) { try { nameRecognition.stop(); } catch (e) {} try { nameRecognition.abort(); } catch (e) {} }
+    }
+
+    // ---- Step 1: ask which language, in one quick word --------------------
+    // Sequential auto-cycling (tried earlier) doesn't work reliably: each
+    // language attempt needs FRESH audio, but a real person only says their
+    // name once — so only whichever language happens to be listening at that
+    // exact moment hears anything; every other attempt just hears silence.
+    // Asking for the language first means exactly one recognizer (the right
+    // one) is listening when the person actually says their name — so it
+    // only takes one attempt, not up to ten.
+    const LANGUAGE_KEYWORDS = [
+        { idx: 0, words: ["english"] },
+        { idx: 1, words: ["urdu"] },
+        { idx: 2, words: ["hindi"] },
+        { idx: 3, words: ["tamil"] },
+        { idx: 4, words: ["malayalam", "malayali"] },
+        { idx: 5, words: ["amharic", "ethiopian", "ethiopia"] },
+        { idx: 6, words: ["yoruba"] },
+        { idx: 7, words: ["hausa"] },
+        { idx: 8, words: ["igbo"] },
+        { idx: 9, words: ["luganda", "uganda", "ganda"] }
+    ];
+    const LANG_PROMPT = "Which language? Say: English, Urdu, Hindi, Tamil, Malayalam, Amharic, Yoruba, Hausa, Igbo, or Luganda.";
+    let langSelectAttempts = 0;
+
+    function detectLanguageChoice(transcript) {
+        const t = normalize(transcript);
+        for (const entry of LANGUAGE_KEYWORDS) {
+            if (entry.words.some(w => t.includes(w))) return LANGUAGES[entry.idx];
+        }
+        return null;
+    }
+
+    function startLanguageSelection() {
+        state = "choosing_lang";
+        langSelectAttempts = 0;
+        bgVideo.volume = LISTENING_VIDEO_VOLUME;
+        setPill("Which language would you like?", "Say: English, Urdu, Hindi, Tamil...");
+
+        let started = false;
+        function begin() {
+            if (started || state !== "choosing_lang") return;
+            started = true;
+            listenForLanguageChoice();
+        }
+        speak(LANG_PROMPT, "en-US", begin);
+        setTimeout(begin, 4500); // fallback if TTS onend never fires
+    }
+
+    function listenForLanguageChoice() {
+        if (state !== "choosing_lang") return;
+        debugCaption.textContent = "Listening for language...";
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        nameRecognition = new SpeechRecognition();
+        nameRecognition.continuous = false;
+        nameRecognition.interimResults = true;
+        nameRecognition.lang = "en-US"; // language NAMES are said in English regardless of chosen language
+        nameRecognition.maxAlternatives = 1;
+
+        let gotFinal = false;
+
+        nameRecognition.onresult = function (event) {
+            let liveText = "";
+            for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
+            debugCaption.textContent = "Heard: " + liveText;
+
+            const last = event.results[event.results.length - 1];
+            if (last.isFinal) {
+                gotFinal = true;
+                const chosen = detectLanguageChoice(last[0].transcript);
+                if (chosen) {
+                    startNameCapture(chosen);
+                } else {
+                    langSelectAttempts++;
+                    if (langSelectAttempts >= 3) {
+                        startNameCapture(LANGUAGES[0]); // give up asking, default to English
+                    } else {
+                        nameCycleTimer = setTimeout(listenForLanguageChoice, 300);
+                    }
+                }
+            }
+        };
+        nameRecognition.onerror = function () { /* handled by onend */ };
+        nameRecognition.onend = function () {
+            if (state === "choosing_lang" && !gotFinal) {
+                langSelectAttempts++;
+                if (langSelectAttempts >= 3) {
+                    startNameCapture(LANGUAGES[0]);
+                } else {
+                    nameCycleTimer = setTimeout(listenForLanguageChoice, 200);
+                }
+            }
+        };
+
+        try { nameRecognition.start(); } catch (e) {
+            nameCycleTimer = setTimeout(listenForLanguageChoice, 300);
+        }
+    }
+
+    // ---- Step 2: listen for name/login in exactly the chosen language -----
+    function startNameCapture(langCfg) {
+        state = "awaiting_id";
+        bgVideo.volume = LISTENING_VIDEO_VOLUME;
+        setPill("Kindly tell me your login or name", "Listening (" + langCfg.label + ")...");
+
+        let started = false;
+        function begin() {
+            if (started || state !== "awaiting_id") return;
+            started = true;
+            listenForName(langCfg);
+        }
+        speak(langCfg.prompt, langCfg.code, begin);
+        setTimeout(begin, 3500); // fallback if TTS onend never fires
+    }
+
+    function listenForName(langCfg) {
+        if (state !== "awaiting_id") return;
+        debugCaption.textContent = "Listening (" + langCfg.label + ")...";
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        nameRecognition = new SpeechRecognition();
+        nameRecognition.continuous = false;
+        nameRecognition.interimResults = true;
+        nameRecognition.lang = langCfg.code;
+        nameRecognition.maxAlternatives = 1;
+
+        let gotFinal = false;
+
+        nameRecognition.onresult = function (event) {
+            let liveText = "";
+            for (let i = 0; i < event.results.length; i++) liveText += event.results[i][0].transcript;
+            debugCaption.textContent = "Heard (" + langCfg.label + "): " + liveText;
+
+            const last = event.results[event.results.length - 1];
+            if (last.isFinal) {
+                gotFinal = true;
+                const staff = findStaff(last[0].transcript);
+                if (staff) {
+                    showResult(staff, langCfg);
+                } else {
+                    setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
+                    speak(langCfg.sorry, langCfg.code);
+                    clearTimeout(resetTimer);
+                    resetTimer = setTimeout(resetToIdle, 2500);
+                }
+            }
+        };
+        nameRecognition.onerror = function () { /* handled by onend */ };
+        nameRecognition.onend = function () {
+            if (state === "awaiting_id" && !gotFinal) {
+                setPill("Sorry, I couldn't find that record", "Say \"Hi PXT\" to try again");
+                speak(langCfg.sorry, langCfg.code);
+                clearTimeout(resetTimer);
+                resetTimer = setTimeout(resetToIdle, 2500);
+            }
+        };
+
+        try { nameRecognition.start(); } catch (e) {
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(resetToIdle, 500);
+        }
+    }
+
+    // Kiosk mode: everything starts automatically on load — video plays with sound
+    // and the mic begins listening right away. No tap/click required.
+    // NOTE: for the video to play WITH SOUND automatically, Chrome must be launched
+    // with the flag --autoplay-policy=no-user-gesture-required (see deployment notes).
+    window.addEventListener("load", function () {
+        bgVideo.muted = false;
+        bgVideo.play().catch(function () {
+            bgVideo.muted = true;
+            bgVideo.play().catch(function () {});
+            const retryUnmute = setInterval(function () {
+                bgVideo.muted = false;
+                bgVideo.play().then(function () { clearInterval(retryUnmute); }).catch(function () {});
+            }, 3000);
+        });
+        setTimeout(initWakeRecognition, 300);
+        try {
+            const warm = new SpeechSynthesisUtterance(' ');
+            warm.volume = 0;
+            window.speechSynthesis.speak(warm);
+        } catch (e) {}
+    });
+
+    window.addEventListener("beforeunload", function () {
+        shouldRun = false;
+        stopNameCapture();
+        if (wakeRecognition) { try { wakeRecognition.stop(); } catch (e) {} }
+    });
+})();
+</script>
+</body>
+</html>
+"""
+
+KIOSK_HTML = KIOSK_HTML.replace("__STAFF_DATA_JSON__", staff_json)
+VIDEO_URL = "https://raw.githubusercontent.com/usman4801/PXT-AI-ASSISTANT/main/banner.mp4"
+KIOSK_HTML = KIOSK_HTML.replace("__VIDEO_SRC__", VIDEO_URL)
+
+st.components.v1.html(KIOSK_HTML, height=1000, scrolling=False)
