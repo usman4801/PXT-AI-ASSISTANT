@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"><title>PXT Hub</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;color:#eaf6ff;}
+.kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
+.bg-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;z-index:0;opacity:.85;}
+.bg-grad{position:absolute;inset:0;z-index:0;
+    background:radial-gradient(circle at 20% 30%,rgba(0,180,255,.15),transparent 45%),
+               radial-gradient(circle at 80% 70%,rgba(0,255,200,.12),transparent 45%),
+               linear-gradient(120deg,#05070c,#0a0f1a 40%,#05070c);
+    background-size:200% 200%;animation:bgshift 18s ease-in-out infinite;}
+@keyframes bgshift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.grid-ov{position:absolute;inset:0;z-index:0;
+    background-image:linear-gradient(rgba(0,220,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,220,255,.05) 1px,transparent 1px);
+    background-size:42px 42px;mask-image:radial-gradient(circle at 50% 40%,black 10%,transparent 75%);}
+.scrim{position:absolute;inset:0;z-index:1;background:radial-gradient(circle at 50% 45%,rgba(5,7,12,.15),rgba(5,7,12,.85) 75%);}
+
+.top-bar{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:transparent;}
+.mic-ind{display:flex;align-items:center;gap:6px;}
+.mic-dot{width:9px;height:9px;border-radius:50%;background:#ff5b5b;box-shadow:0 0 8px rgba(255,80,80,.8);transition:all .3s;}
+.mic-dot.on{background:#46ffb0;box-shadow:0 0 10px rgba(70,255,176,.9);}
+.mic-label{font-size:10px;color:#7fd0ef;letter-spacing:1px;text-transform:uppercase;}
+.debug{color:#5fa8c4;font-size:10.5px;background:rgba(10,16,26,.5);padding:4px 12px;border-radius:999px;border:1px solid rgba(80,200,255,.15);max-width:50vw;text-align:center;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.brand{position:relative;z-index:2;color:#e8f6ff;letter-spacing:8px;font-size:20px;font-weight:700;opacity:.8;text-transform:uppercase;margin-bottom:16px;}
+.pulse-ring{position:relative;z-index:2;width:110px;height:110px;border-radius:50%;border:2px solid rgba(0,190,255,.25);display:flex;align-items:center;justify-content:center;margin-bottom:24px;}
+.pulse-ring.active{animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,190,255,.3)}50%{box-shadow:0 0 0 22px rgba(0,190,255,0)}}
+.pulse-ring .icon{font-size:42px;}
+
+.status-display{position:relative;z-index:2;text-align:center;max-width:500px;padding:0 20px;}
+.status-main{font-size:13px;font-weight:400;color:rgba(234,246,255,.6);min-height:18px;transition:all .3s;letter-spacing:.3px;line-height:1.5;}
+.status-sub{font-size:11px;color:rgba(127,208,239,.5);min-height:14px;transition:all .3s;margin-top:4px;}
+
+.rcard{position:relative;z-index:2;background:rgba(15,22,34,.75);border:1px solid rgba(90,210,255,.25);border-radius:20px;padding:24px 32px;backdrop-filter:blur(14px);text-align:center;box-shadow:0 0 30px rgba(0,150,255,.1);margin-top:18px;animation:pop .4s ease;display:none;}
+.rcard.show{display:block;}
+.rcard .rn{font-size:20px;font-weight:700;margin-bottom:3px;}
+.rcard .ri{font-size:11px;letter-spacing:2px;color:#7fd8ff;opacity:.7;margin-bottom:14px;text-transform:uppercase;}
+.rcard .rg{display:flex;justify-content:space-around;gap:14px;flex-wrap:wrap;}
+.rcard .rg .ri-item .lbl{font-size:9px;letter-spacing:1.5px;color:#8fb8cf;text-transform:uppercase;margin-bottom:3px;}
+.rcard .rg .ri-item .val{font-size:16px;font-weight:600;}
+.c-pres{color:#4dffb0;} .c-abs{color:#ff6767;} .c-oth{color:#ffd166;}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+.pill{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:4;padding:8px 22px;border-radius:999px;background:rgba(10,16,26,.6);border:1px solid rgba(80,200,255,.2);backdrop-filter:blur(10px);text-align:center;max-width:90vw;}
+.pill .p1{color:rgba(223,245,255,.7);font-size:11px;font-weight:500;letter-spacing:.4px;}
+
+/* Start overlay */
+.start-overlay{position:fixed;inset:0;z-index:100;background:rgba(5,7,12,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;backdrop-filter:blur(6px);}
+.start-overlay h2{color:#eaf6ff;font-size:24px;font-weight:700;}
+.start-overlay p{color:#8fb8cf;font-size:14px;max-width:400px;text-align:center;line-height:1.6;}
+.sel-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.sel-wrap label{color:#7fd0ef;font-size:11px;letter-spacing:1px;text-transform:uppercase;}
+.sel{padding:9px 16px;border-radius:12px;border:1px solid rgba(0,190,255,.3);background:rgba(10,16,26,.8);color:#dff5ff;font-size:13px;min-width:280px;outline:none;}
+.sel option{background:#0a0d14;color:#dff5ff;}
+.start-btn{padding:14px 36px;border-radius:999px;border:1px solid rgba(0,190,255,.4);background:rgba(0,150,255,.15);color:#dff5ff;font-size:16px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.5px;margin-top:6px;}
+.start-btn:hover{background:rgba(0,150,255,.3);box-shadow:0 0 20px rgba(0,190,255,.3);}
+.start-btn:disabled{opacity:.4;cursor:not-allowed;}
+.mic-test{display:flex;align-items:center;gap:10px;margin:4px 0;}
+.mic-test-bar{width:160px;height:8px;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden;}
+.mic-test-fill{height:100%;width:0%;background:#46ffb0;border-radius:6px;transition:width .1s;}
+.mic-test-label{font-size:10px;color:#8fb8cf;}
+.voice-preview{padding:8px 18px;border-radius:999px;border:1px solid rgba(0,190,255,.25);background:rgba(0,150,255,.08);color:#9fd8ef;font-size:12px;cursor:pointer;transition:all .2s;margin-top:2px;}
+.voice-preview:hover{background:rgba(0,150,255,.2);}
+.theme-dot{width:18px;height:18px;border-radius:50%;border:2px solid rgba(0,190,255,.4);background:linear-gradient(135deg,#0af,#0fa);cursor:pointer;transition:all .3s;opacity:.6;flex-shrink:0;}
+.theme-dot:hover{opacity:1;box-shadow:0 0 12px rgba(0,190,255,.5);transform:scale(1.15);}
+.theme-dot.alt{background:linear-gradient(135deg,#f0a,#fa0);}
+</style>
+</head>
+<body>
+<div class="start-overlay" id="startOverlay">
+    <h2>&#127897;&#65039; PXT Hub</h2>
+    <p>Set up your microphone and voice, then start.</p>
+
+    <div class="sel-wrap">
+        <label>&#127908; Microphone</label>
+        <select class="sel" id="micSelect"><option value="">Loading...</option></select>
+    </div>
+    <div class="mic-test">
+        <div class="mic-test-bar"><div class="mic-test-fill" id="testFill"></div></div>
+        <div class="mic-test-label" id="testLabel">Select mic</div>
+    </div>
+
+    <div class="sel-wrap" style="margin-top:8px;">
+        <label>&#128483;&#65039; Voice</label>
+        <select class="sel" id="voiceSelect"><option value="">Loading voices...</option></select>
+    </div>
+    <button class="voice-preview" id="voicePreview">&#9654; Preview voice</button>
+
+    <button class="start-btn" id="startBtn" disabled>&#127908; Start</button>
+</div>
+
+<div class="kiosk" id="kiosk" style="display:none;">
+    <video class="bg-video" id="bgVideo" autoplay loop playsinline style="display:none;"></video>
+    <div class="bg-grad" id="bgGrad"></div><div class="grid-ov"></div><div class="scrim"></div>
+    <div class="top-bar">
+        <div class="mic-ind"><div class="mic-dot" id="micDot"></div><div class="mic-label" id="micLabel">MIC OFF</div></div>
+        <div class="debug" id="debug">&nbsp;</div>
+        <div class="theme-dot" id="themeDot" title="Switch theme"></div>
+    </div>
+    <div class="brand">PXT&nbsp;HUB</div>
+    <div class="pulse-ring" id="pulseRing"><div class="icon">&#127897;&#65039;</div></div>
+    <!-- Badge ID input for manual entry (RFID later) -->
+    <div id="badgeWrap" style="position:relative;z-index:2;display:none;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <input type="text" id="badgeInput" placeholder="Enter Badge ID" autocomplete="off"
+                style="padding:10px 18px;border-radius:12px;border:1px solid rgba(0,190,255,.4);background:rgba(10,16,26,.8);color:#dff5ff;font-size:18px;width:220px;text-align:center;outline:none;letter-spacing:2px;" />
+            <button id="badgeBtn" style="padding:10px 20px;border-radius:12px;border:1px solid rgba(0,190,255,.4);background:rgba(0,150,255,.2);color:#dff5ff;font-size:14px;cursor:pointer;font-weight:600;">GO</button>
+        </div>
+        <div style="color:rgba(127,208,239,.6);font-size:10px;margin-top:6px;text-align:center;">Or say your Badge ID / Name</div>
+    </div>
+    <div class="status-display">
+        <div class="status-main" id="statusMain"></div>
+        <div class="status-sub" id="statusSub"></div>
+    </div>
+    <div class="rcard" id="rcard">
+        <div class="rn" id="rn"></div><div class="ri" id="ri"></div>
+        <div class="rg">
+            <div class="ri-item"><div class="lbl" id="rl1">Shift</div><div class="val" id="rv1"></div></div>
+            <div class="ri-item"><div class="lbl" id="rl2">Off Days</div><div class="val" id="rv2"></div></div>
+            <div class="ri-item"><div class="lbl" id="rl3">Department</div><div class="val" id="rv3"></div></div>
+        </div>
+    </div>
+    <div class="pill"><div class="p1" id="p1">PXT Hub</div></div>
+</div>
+
+<script>
+(function(){
+var STAFF=__STAFF__;
+var VIDEO_SRC="__VIDEO__";
+var $=function(id){return document.getElementById(id);};
+var micDot=$('micDot'),micLabel=$('micLabel'),debug=$('debug');
+var statusMain=$('statusMain'),statusSub=$('statusSub');
+var pulseRing=$('pulseRing'),p1=$('p1');
+var bgVideo=$('bgVideo'),bgGrad=$('bgGrad');
+var rcard=$('rcard'),rn=$('rn'),ri=$('ri'),rv1=$('rv1'),rv2=$('rv2'),rv3=$('rv3'),rl1=$('rl1'),rl2=$('rl2'),rl3=$('rl3');
+var micSelect=$('micSelect'),testFill=$('testFill'),testLabel=$('testLabel'),startBtn=$('startBtn');
+var voiceSelect=$('voiceSelect'),voicePreview=$('voicePreview');
+
+var THEMES=["__VIDEO__","banner2.mp4"];
+var currentTheme=0;
+var themeDot=$('themeDot');
+themeDot.onclick=function(){
+    currentTheme=(currentTheme+1)%THEMES.length;
+    themeDot.classList.toggle('alt',currentTheme===1);
+    if(bgVideo){
+        var vol=bgVideo.volume,mut=bgVideo.muted;
+        bgVideo.src=THEMES[currentTheme];
+        bgVideo.volume=vol;bgVideo.muted=mut;
+        bgVideo.play().catch(function(){bgVideo.muted=true;bgVideo.play().catch(function(){});});
+    }
+};
+var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(!SR){startBtn.style.display='none';return;}
+
+var speaking=false,listening=false,rec=null,shouldRun=true,lastActivity=Date.now();
+var restartTimeout=null,micStream=null,selectedDeviceId=null,testStream=null,testMeter=null;
+var userName=null,userStaff=null,silenceTimer=null,sleepTimer=null,chosenVoice=null;
+var state='sleep'; // sleep | wake_listen | ready
+var SLEEP_TIMEOUT=30000;
+var userLang='en'; // current session language: 'en' or native code
+var userNativeName=''; // e.g. 'Malayalam', 'Hindi'
+
+/* ===== LANGUAGE MAP ===== */
+var LANG_MAP={
+    'hindi':{code:'hi-IN',name:'Hindi',tts:'hi-IN',greet:'Namaste'},
+    'urdu':{code:'ur-PK',name:'Urdu',tts:'ur-PK',greet:'Assalam Alaikum'},
+    'arabic':{code:'ar-AE',name:'Arabic',tts:'ar-SA',greet:'Marhaba'},
+    'french':{code:'fr-FR',name:'French',tts:'fr-FR',greet:'Bonjour'},
+    'swahili':{code:'sw-KE',name:'Swahili',tts:'sw-KE',greet:'Habari'},
+    'tagalog':{code:'fil-PH',name:'Tagalog',tts:'fil-PH',greet:'Kamusta'},
+    'nepali':{code:'ne-NP',name:'Nepali',tts:'ne-NP',greet:'Namaste'},
+    'sinhala':{code:'si-LK',name:'Sinhala',tts:'si-LK',greet:'Ayubowan'},
+    'malyalam':{code:'ml-IN',name:'Malayalam',tts:'ml-IN',greet:'Namaskaram'},
+    'malayalam':{code:'ml-IN',name:'Malayalam',tts:'ml-IN',greet:'Namaskaram'},
+    'amharic':{code:'am-ET',name:'Amharic',tts:'am-ET',greet:'Selam'},
+    'burmese':{code:'my-MM',name:'Burmese',tts:'my-MM',greet:'Mingalarbar'},
+    'akan':{code:'en-GH',name:'Akan',tts:'en-GH',greet:'Akwaaba'},
+    'shona':{code:'en-ZW',name:'Shona',tts:'en-ZW',greet:'Mhoro'},
+    'krio':{code:'en-SL',name:'Krio',tts:'en-SL',greet:'Aw di bodi'},
+    'igbo':{code:'ig-NG',name:'Igbo',tts:'ig-NG',greet:'Ndewo'},
+    'chichewa':{code:'en-MW',name:'Chichewa',tts:'en-MW',greet:'Moni'},
+    'bemba':{code:'en-ZM',name:'Bemba',tts:'en-ZM',greet:'Shani'},
+    'kinyarwanda':{code:'rw-RW',name:'Kinyarwanda',tts:'rw-RW',greet:'Muraho'},
+    'kirundi':{code:'rn-BI',name:'Kirundi',tts:'rn-BI',greet:'Amahoro'},
+    'mandinka':{code:'en-GM',name:'Mandinka',tts:'en-GM',greet:'I be di'},
+    'dinka':{code:'en-SS',name:'Dinka',tts:'en-SS',greet:'Kudual'}
+};
+
+function extractNativeLang(langStr){
+    if(!langStr) return null;
+    var parts=langStr.split('/');
+    if(parts.length<2) return null;
+    var native=parts[parts.length-1].trim().toLowerCase();
+    return LANG_MAP[native]||null;
+}
+function setSessionLang(code){
+    userLang=code;
+    if(rec){try{rec.abort();}catch(e){}}
+}
+
+/* ===== TRANSLATIONS ===== */
+var TRANSLATIONS={
+    'hi-IN':{
+        greet_morning:'Suprabhat',greet_afternoon:'Namaste',greet_evening:'Shubh sandhya',
+        your_shift:'aapki shift hai',your_off:'aapki chutti hai',your_dept:'aapka vibhaag hai',
+        your_manager:'aapke manager hain',your_agency:'aapki agency hai',your_doj:'aapki joining date hai',
+        your_phone:'aapka phone number hai',your_birthday:'aapka janamdin ka mahina hai',
+        your_hours:'aapke kaam ke ghante hain',your_timing:'aapki shift ka samay hai',
+        your_pickup:'aapka pickup point hai',your_email:'aapki email hai',
+        your_country:'aapka desh hai',your_language:'aapki bhaasha hai',your_tenure:'aapka contract khatam hota hai',
+        welcome:'mein aapki kya madad kar sakta hoon?',bye:'Alvida! Jab zaroorat ho Hi PXT bolein!',
+        not_found:'mujhe yeh jaankari nahi mili',how_help:'Aap mujhse shift, chutti, department, manager ke baare mein pooch sakte hain!',
+        thanks:'Dhanyavaad!',how_are:'Main badiya hoon! Aap kaise hain?',
+        and:'aur',joke:'Karyakarta seedhi kyun laaya? Nai unchaaiyon tak pahunchne ke liye!'
+    },
+    'ur-PK':{
+        greet_morning:'Assalam Alaikum',greet_afternoon:'Assalam Alaikum',greet_evening:'Assalam Alaikum',
+        your_shift:'aapki shift hai',your_off:'aapki chutti hai',your_dept:'aapka department hai',
+        your_manager:'aapke manager hain',your_agency:'aapki agency hai',your_doj:'aapki joining date hai',
+        your_phone:'aapka phone number hai',your_birthday:'aapka birthday month hai',
+        your_hours:'aapke kaam ke ghantay hain',your_timing:'aapki shift ka waqt hai',
+        your_pickup:'aapka pickup point hai',your_email:'aapki email hai',
+        your_country:'aapka mulk hai',your_language:'aapki zubaan hai',your_tenure:'aapka contract khatam hota hai',
+        welcome:'mein aapki kya madad kar sakta hoon?',bye:'Khuda Hafiz! Zaroorat ho toh Hi PXT kahein!',
+        not_found:'mujhe yeh maloomat nahi mili',how_help:'Aap mujhse shift, chutti, department, manager ke baare mein pooch sakte hain!',
+        thanks:'Shukriya!',how_are:'Main theek hoon! Aap kaise hain?',
+        and:'aur',joke:'Mulazim seedhi kyun laaya? Nai bulandiyon tak pohanchne ke liye!'
+    },
+    'ar-SA':{
+        greet_morning:'Sabah al khair',greet_afternoon:'Marhaba',greet_evening:'Masa al khair',
+        your_shift:'wardiyyatuk hiya',your_off:'yawm al ijaza',your_dept:'qismuk huwa',
+        your_manager:'mudiruk huwa',your_agency:'wikalatuk hiya',your_doj:'tarikh al iltihaq',
+        your_phone:'raqm haatifak huwa',your_birthday:'shahr miladak huwa',
+        your_hours:'saat al amal hiya',your_timing:'waqt al wardiyya huwa',
+        your_pickup:'nuqtat al tawseel hiya',your_email:'bariidak al elektroniy huwa',
+        your_country:'baladak huwa',your_language:'lughatuk hiya',your_tenure:'nihayat al aqd hiya',
+        welcome:'kayfa yumkinuniy musaaadatuk?',bye:'Maa al salama! Qul Hi PXT inda al haaja!',
+        not_found:'lam ajid hadhihi al maalumaat',how_help:'Yumkinuk sualiy an al wardiyya, al ijaza, al qism, aw al mudir!',
+        thanks:'Shukran!',how_are:'Ana bikhair! Kayf halak?',
+        and:'wa',joke:'Limadha ahdar al muwazzaf al sullam? Lil wusul ila aali al manaasib!'
+    },
+    'ml-IN':{
+        greet_morning:'Suprabhatam',greet_afternoon:'Namaskaram',greet_evening:'Shubha sandhya',
+        your_shift:'ningalude shift aanu',your_off:'ningalude azhcha avasham aanu',your_dept:'ningalude vibhaagam aanu',
+        your_manager:'ningalude manager aanu',your_agency:'ningalude agency aanu',your_doj:'ningalude joining date aanu',
+        your_phone:'ningalude phone number aanu',your_birthday:'ningalude janmadinam maasam aanu',
+        your_hours:'ningalude joli samayam aanu',your_timing:'ningalude shift samayam aanu',
+        your_pickup:'ningalude pickup point aanu',your_email:'ningalude email aanu',
+        your_country:'ningalude naadu aanu',your_language:'ningalude bhaasha aanu',your_tenure:'ningalude contract avasaanikkunnathu',
+        welcome:'enikku ningale engane sahayikkaam?',bye:'Vida! Aavashyam ullapol Hi PXT parayuka!',
+        not_found:'ee vivaram kandetthaan kazhinjilla',how_help:'Ningalkku ennodu shift, azhcha avasham, department, manager ennivayekurichchu chodhikkaam!',
+        thanks:'Nanni!',how_are:'Njaan sughamaayi! Ningal engane?',
+        and:'um',joke:'Joli kkaaran enikku eni ee padi kondu vannath enthinaanu? Puthiya unnathangalil ethaan!'
+    },
+    'sw-KE':{
+        greet_morning:'Habari za asubuhi',greet_afternoon:'Habari za mchana',greet_evening:'Habari za jioni',
+        your_shift:'zamu yako ni',your_off:'siku yako ya mapumziko ni',your_dept:'idara yako ni',
+        your_manager:'meneja wako ni',your_agency:'wakala wako ni',your_doj:'tarehe yako ya kujiunga ni',
+        your_phone:'nambari yako ya simu ni',your_birthday:'mwezi wako wa kuzaliwa ni',
+        your_hours:'masaa yako ya kazi ni',your_timing:'wakati wa zamu ni',
+        your_pickup:'mahali pa kukuchukua ni',your_email:'barua pepe yako ni',
+        your_country:'nchi yako ni',your_language:'lugha yako ni',your_tenure:'mkataba wako unaisha',
+        welcome:'naweza kukusaidia vipi?',bye:'Kwaheri! Sema Hi PXT unapohitaji msaada!',
+        not_found:'sikupata taarifa hiyo',how_help:'Unaweza kuniuliza kuhusu zamu, siku ya kupumzika, idara, au meneja!',
+        thanks:'Asante!',how_are:'Niko sawa! Wewe je?',
+        and:'na',joke:'Kwa nini mfanyakazi alileta ngazi? Kufikia urefu mpya!'
+    },
+    'fr-FR':{
+        greet_morning:'Bonjour',greet_afternoon:'Bon après-midi',greet_evening:'Bonsoir',
+        your_shift:'votre quart est',your_off:'votre jour de repos est',your_dept:'votre département est',
+        your_manager:'votre responsable est',your_agency:'votre agence est',your_doj:'votre date de début est',
+        your_phone:'votre numéro de téléphone est',your_birthday:'votre mois de naissance est',
+        your_hours:'vos heures de travail sont',your_timing:'les horaires de votre quart sont',
+        your_pickup:'votre point de ramassage est',your_email:'votre email est',
+        your_country:'votre pays est',your_language:'votre langue est',your_tenure:'votre contrat se termine le',
+        welcome:'comment puis-je vous aider?',bye:'Au revoir! Dites Hi PXT quand vous avez besoin!',
+        not_found:'je nai pas trouvé cette information',how_help:'Vous pouvez me demander votre quart, repos, département ou responsable!',
+        thanks:'Merci!',how_are:'Je vais bien! Et vous?',
+        and:'et',joke:'Pourquoi employer a apporté une échelle? Pour atteindre de nouveaux sommets!'
+    },
+    'fil-PH':{
+        greet_morning:'Magandang umaga',greet_afternoon:'Magandang hapon',greet_evening:'Magandang gabi',
+        your_shift:'ang shift mo ay',your_off:'ang day off mo ay',your_dept:'ang department mo ay',
+        your_manager:'ang manager mo ay',your_agency:'ang agency mo ay',your_doj:'ang joining date mo ay',
+        your_phone:'ang phone number mo ay',your_birthday:'ang birthday month mo ay',
+        your_hours:'ang oras ng trabaho mo ay',your_timing:'ang shift timing mo ay',
+        your_pickup:'ang pickup point mo ay',your_email:'ang email mo ay',
+        your_country:'ang bansa mo ay',your_language:'ang wika mo ay',your_tenure:'ang kontrata mo ay matatapos sa',
+        welcome:'paano kita matutulungan?',bye:'Paalam! Sabihin mo Hi PXT kapag kailangan!',
+        not_found:'hindi ko nakita ang impormasyong iyon',how_help:'Pwede mo akong tanungin tungkol sa shift, day off, department, o manager!',
+        thanks:'Salamat!',how_are:'Mabuti naman! Ikaw?',
+        and:'at',joke:'Bakit nagdala ng hagdan ang empleyado? Para abot ang bagong taas!'
+    },
+    'ne-NP':{
+        greet_morning:'Subha prabhat',greet_afternoon:'Namaste',greet_evening:'Shubha sandhya',
+        your_shift:'tapaaiko shift ho',your_off:'tapaaiko bida ho',your_dept:'tapaaiko vibhaag ho',
+        your_manager:'tapaaiko manager hun',your_agency:'tapaaiko agency ho',your_doj:'tapaaiko joining date ho',
+        your_phone:'tapaaiko phone number ho',your_birthday:'tapaaiko janma mahina ho',
+        your_hours:'tapaaiko kaam ko ghanta ho',your_timing:'tapaaiko shift ko samay ho',
+        your_pickup:'tapaaiko pickup point ho',your_email:'tapaaiko email ho',
+        your_country:'tapaaiko desh ho',your_language:'tapaaiko bhaasha ho',your_tenure:'tapaaiko contract sakkinchha',
+        welcome:'ma tapaailai kasari maddat garna sakchhu?',bye:'Bidaa! Jaroorat pardaa Hi PXT bhannus!',
+        not_found:'malaai yo jaankari bhetiyena',how_help:'Tapaaile malai shift, bida, department, manager bare sodhna saknu hunchha!',
+        thanks:'Dhanyabaad!',how_are:'Ma sanchai chhu! Tapaaiko kasto chha?',
+        and:'ra',joke:'Karmachari le bhyaang kina lyaayo? Naya unchaaima pugna!'
+    }
+};
+
+function tr(key){
+    var langCode=userLang;
+    if(langCode==='en'||langCode==='en-US') return null;
+    // Try exact match first, then base language
+    var t=TRANSLATIONS[langCode];
+    if(!t){var base=langCode.split('-')[0];for(var k in TRANSLATIONS){if(k.startsWith(base+'-')){t=TRANSLATIONS[k];break;}}}
+    if(!t) return null;
+    return t[key]||null;
+}
+
+function trGreet(){
+    var h=new Date().getHours();
+    var key=h<12?'greet_morning':h<17?'greet_afternoon':'greet_evening';
+    return tr(key)||timeGreet();
+}
+
+/* ===== VOICE ===== */
+var VP=['Google UK English Female','Google US English','Microsoft Zira','Microsoft Jenny','Samantha','Karen','Microsoft David'];
+function loadVoices(){
+    var voices=window.speechSynthesis.getVoices();if(!voices.length)return;
+    voiceSelect.innerHTML='';
+    var en=voices.filter(function(v){return v.lang.startsWith('en');});
+    var added={};
+    VP.forEach(function(p){var v=voices.find(function(x){return x.name.indexOf(p)>=0;});
+        if(v&&!added[v.name]){var o=document.createElement('option');o.value=v.name;o.textContent='\u2b50 '+v.name;voiceSelect.appendChild(o);added[v.name]=1;}});
+    en.forEach(function(v){if(!added[v.name]){var o=document.createElement('option');o.value=v.name;o.textContent=v.name;voiceSelect.appendChild(o);added[v.name]=1;}});
+    chosenVoice=null;
+    for(var i=0;i<VP.length;i++){var v=voices.find(function(x){return x.name.indexOf(VP[i])>=0;});if(v){chosenVoice=v;voiceSelect.value=v.name;break;}}
+    if(!chosenVoice&&en.length){chosenVoice=en[0];voiceSelect.value=en[0].name;}
+}
+window.speechSynthesis.onvoiceschanged=loadVoices;loadVoices();
+voiceSelect.onchange=function(){var v=window.speechSynthesis.getVoices();chosenVoice=v.find(function(x){return x.name===voiceSelect.value;})||null;};
+voicePreview.onclick=function(){try{window.speechSynthesis.cancel();}catch(e){}var u=new SpeechSynthesisUtterance("Hello! I am your PXT Hub assistant.");u.rate=0.95;u.pitch=1.05;if(chosenVoice)u.voice=chosenVoice;window.speechSynthesis.speak(u);};
+
+/* ===== HELPERS ===== */
+function norm(s){return(s||"").toLowerCase().trim().replace(/[^a-z0-9\s]/g,"").replace(/\s+/g," ");}
+function pick(a){return a[Math.floor(Math.random()*a.length)];}
+function log(m){debug.textContent=m;}
+function setMic(on){micDot.classList.toggle('on',on);micLabel.textContent=on?'LISTENING':'MIC OFF';pulseRing.classList.toggle('active',on);}
+function setStatus(m,s){statusMain.textContent=m||'';statusSub.textContent=s||'';}
+function setPill(t){p1.textContent=t;}
+function hideCard(){rcard.classList.remove('show');}
+function showCard(s,cardInfo){
+    rn.textContent=s.name;ri.textContent='Badge: '+s.id;
+    if(cardInfo){rl1.textContent=cardInfo[0][0];rv1.textContent=cardInfo[0][1];rv1.className='val c-pres';rl2.textContent=cardInfo[1][0];rv2.textContent=cardInfo[1][1];rl3.textContent=cardInfo[2][0];rv3.textContent=cardInfo[2][1];}
+    else{rl1.textContent='Shift';rv1.textContent=s.shift||'\u2014';rv1.className='val c-pres';rl2.textContent='Off Days';rv2.textContent=(s.off1||'')+' & '+(s.off2||'');rl3.textContent='Department';rv3.textContent=s.dept||'\u2014';}
+    rcard.classList.add('show');
+}
+
+/* ===== MIC SETUP ===== */
+async function loadMics(){
+    try{var ts=await navigator.mediaDevices.getUserMedia({audio:true});ts.getTracks().forEach(function(t){t.stop();});
+    var devs=await navigator.mediaDevices.enumerateDevices();var mics=devs.filter(function(d){return d.kind==='audioinput';});
+    micSelect.innerHTML='';
+    mics.forEach(function(m,i){var o=document.createElement('option');o.value=m.deviceId;o.textContent=m.label||('Mic '+(i+1));micSelect.appendChild(o);});
+    if(mics.length){selectedDeviceId=mics[0].deviceId;startBtn.disabled=false;testMicDev(selectedDeviceId);}
+    }catch(e){micSelect.innerHTML='<option>Denied</option>';}
+}
+async function testMicDev(id){
+    if(testStream){testStream.getTracks().forEach(function(t){t.stop();});}if(testMeter){testMeter.stop();}
+    testFill.style.width='0%';
+    try{testStream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:id}}});
+    var ctx=new(window.AudioContext||window.webkitAudioContext)();var a=ctx.createAnalyser();a.fftSize=256;
+    ctx.createMediaStreamSource(testStream).connect(a);var d=new Uint8Array(a.frequencyBinCount);var on=true;
+    (function tk(){if(!on)return;a.getByteFrequencyData(d);var s=0;for(var i=0;i<d.length;i++)s+=d[i];
+    var p=Math.min(100,Math.round((s/d.length)/128*100));testFill.style.width=p+'%';
+    testFill.style.background=p>30?'#46ffb0':p>10?'#ffd166':'#ff5b5b';requestAnimationFrame(tk);})();
+    testMeter={stop:function(){on=false;try{ctx.close();}catch(e){}}};
+    }catch(e){}
+}
+micSelect.onchange=function(){selectedDeviceId=micSelect.value;if(selectedDeviceId)testMicDev(selectedDeviceId);};
+
+/* ===== TTS =====
+   IMPORTANT LIMITATION: this kiosk uses the browser's built-in Web Speech
+   API (window.speechSynthesis) — there is no server/API integration here,
+   so voice quality and which languages even have a voice at all depend
+   entirely on what's installed on the machine/OS running the kiosk.
+   A true "high-quality neural TTS with correct regional phonemes" (Azure
+   Speech, Google Cloud TTS, ElevenLabs, etc.) would need a backend call
+   with an API key and audio playback — that's a real architecture change,
+   not a prompt/config tweak, and isn't something this static HTML file
+   can add on its own. What IS fixed here: more robust matching so we
+   actually find and use a native voice when the OS has one installed,
+   instead of silently falling back to a mismatched/default voice. */
+function normTag(s){return (s||'').toLowerCase().replace('_','-');}
+function speak(text,cb,forceLang){
+    speaking=true;stopListening();clearTimeout(silenceTimer);clearTimeout(sleepTimer);
+    try{window.speechSynthesis.cancel();}catch(e){}
+    setStatus(text,"");
+    var u=new SpeechSynthesisUtterance(text);
+    var lang=forceLang||(userLang==='en'?'en-US':userLang);
+    u.lang=lang;u.rate=0.95;u.pitch=1.05;
+    // Use chosen voice for English, auto-select for native
+    if(lang==='en-US'&&chosenVoice){u.voice=chosenVoice;}
+    else if(lang!=='en-US'){
+        var voices=window.speechSynthesis.getVoices();
+        var target=normTag(lang),base=target.split('-')[0];
+        // exact tag match first, then base-language match (case/underscore tolerant)
+        var nv=voices.find(function(v){return normTag(v.lang)===target;})
+            ||voices.find(function(v){return normTag(v.lang).indexOf(base+'-')===0||normTag(v.lang)===base;});
+        if(nv){u.voice=nv;}
+        else{log('No native voice installed for '+lang+' — using device default');}
+    }
+    var done=false;function fin(){if(done)return;done=true;speaking=false;if(cb)cb();}
+    u.onend=fin;u.onerror=fin;window.speechSynthesis.speak(u);
+    setTimeout(fin,Math.max(text.length*100,3000)+5000);
+}
+
+/* ===== STAFF SEARCH ===== */
+function findStaff(t){
+    t=norm(t);if(!t||t.length<2)return null;
+    for(var i=0;i<STAFF.length;i++){if(norm(STAFF[i].name)&&t.indexOf(norm(STAFF[i].name))>=0)return STAFF[i];}
+    for(var i=0;i<STAFF.length;i++){var al=STAFF[i].aliases||[];for(var j=0;j<al.length;j++){if(al[j].length>1&&t.indexOf(norm(al[j]))>=0)return STAFF[i];}}
+    for(var i=0;i<STAFF.length;i++){var tk=norm(STAFF[i].name).split(" ");if(tk.length>0&&tk.every(function(w){return t.indexOf(w)>=0;}))return STAFF[i];}
+    var words=t.split(" ").filter(function(w){return w.length>=3;});
+    for(var i=0;i<STAFF.length;i++){var tk=norm(STAFF[i].name).split(" ");
+        for(var j=0;j<tk.length;j++){if(tk[j].length>=3){for(var k=0;k<words.length;k++){if(words[k]===tk[j])return STAFF[i];}}}
+    }
+    return null;
+}
+
+function findByBadge(id){
+    id=id.trim();
+    for(var i=0;i<STAFF.length;i++){
+        var sid=String(STAFF[i].id).trim();
+        if(sid===id)return STAFF[i];
+        // Partial match (last 6 digits)
+        if(id.length>=6 && sid.indexOf(id)>=0)return STAFF[i];
+        if(id.length>=6 && sid.slice(-6)===id.slice(-6))return STAFF[i];
+    }
+    return null;
+}
+
+// Badge input handler
+document.addEventListener('DOMContentLoaded',function(){
+    var bi=document.getElementById('badgeInput');
+    var bb=document.getElementById('badgeBtn');
+    if(bb) bb.onclick=function(){if(bi&&bi.value.trim().length>=3) handleBadgeEntry(bi.value.trim());};
+    if(bi) bi.onkeydown=function(e){if(e.key==='Enter'&&bi.value.trim().length>=3) handleBadgeEntry(bi.value.trim());};
+});
+function handleBadgeEntry(val){
+    var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
+    handleLogin(val);
+}
+
+
+function timeGreet(){var h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";}
+function timeStr(){return new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});}
+// Date/day/month names now follow the active session language instead of
+// always rendering in English (previously hardcoded to 'en-US' regardless
+// of userLang — a real source of the "replies back in English" complaint).
+function activeLocale(){
+    if(userLang==='en'||userLang==='en-US') return 'en-US';
+    // Base language subtag works for Intl even without a country match
+    try{ new Intl.DateTimeFormat(userLang); return userLang; }catch(e){ return 'en-US'; }
+}
+function dateStr(){
+    try{
+        return new Date().toLocaleDateString(activeLocale(),{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    }catch(e){
+        return new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    }
+}
+
+/* ===== WAKE WORD — ultra broad ===== */
+function isWakeWord(text){
+    var t=norm(text);
+    // Must have a greeting
+    if(!/\b(hi|hey|hello|hai|hype|high|hike)\b/.test(t)) return false;
+    // Must have something that sounds like PXT — any word with p/b/v + x/k/s
+    var words=t.split(" ");
+    for(var i=0;i<words.length;i++){
+        var w=words[i];if(w.length<2)continue;
+        if(/[pbvf]/.test(w)&&/[xkscz]/.test(w))return true;
+    }
+    // Also check: text, picks, fix, fax, pixel, etc
+    if(/\b(text|picks?|pics?|pecks?|pixel|pixie|fix|fax)\b/.test(t))return true;
+    // Last resort: any 2-4 char word with 'p' that isn't the greeting itself
+    for(var i=0;i<words.length;i++){
+        if(words[i].length>=2&&words[i].length<=5&&/p/.test(words[i])&&!/^(hi|hey|hello|high|hype)$/.test(words[i]))return true;
+    }
+    return false;
+}
+
+/* ===== EXTRACT NAME from speech ===== */
+function extractName(text){
+    var t=text.toLowerCase().trim();
+    // Remove ALL filler/intro words
+    var junk=["hi","hello","hey","salam","good morning","good afternoon","good evening",
+              "my name is","my name","name is","i am","im","i'm","this is","its","it's",
+              "mera naam hai","mera naam","naam hai","main hoon","main hun","call me",
+              "you can call me","please","sir","madam","bhai","the","a","an","is","am",
+              "are","was","um","uh","so","ok","okay","well","and","yes","yeah"];
+    // Sort longest first so "my name is" matches before "my" and "name" and "is"
+    junk.sort(function(a,b){return b.length-a.length;});
+    for(var i=0;i<junk.length;i++){
+        var re=new RegExp("\\b"+junk[i].replace(/\s+/g,"\\s+")+"\\b","gi");
+        t=t.replace(re,"");
+    }
+    t=t.replace(/\s+/g," ").trim();
+    // If nothing left, take last word from original
+    if(t.length<2){
+        var w=text.trim().split(/\s+/);
+        t=w[w.length-1];
+    }
+    // Capitalize
+    return t.split(" ").filter(function(w){return w.length>=2;}).slice(0,2)
+        .map(function(w){return w.charAt(0).toUpperCase()+w.slice(1).toLowerCase();}).join(" ")||text.trim();
+}
+
+/* ===== SLEEP/WAKE ===== */
+function goToSleep(){
+    stopListening();hideCard();userName=null;userStaff=null;state='sleep';userLang='en';userNativeName='';
+    var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
+    clearTimeout(silenceTimer);clearTimeout(sleepTimer);
+    setStatus("","Say \"Hi PXT\" to wake me up");setPill("Say \"Hi PXT\" to start");log('Sleep mode');
+    setTimeout(startListening,300);
+}
+function resetSleepTimer(){
+    clearTimeout(sleepTimer);
+    if(state==='ready'){
+        sleepTimer=setTimeout(function(){
+            if(!speaking) speak("Going back to sleep. Say Hi PXT when you need me!",function(){goToSleep();});
+        },SLEEP_TIMEOUT);
+    }
+}
+
+/* ===== FUZZY COMPREHENSION FALLBACK =====
+   The intent matching below is regex/keyword based, so misspellings,
+   ASR mis-hearings, or unfamiliar phrasing fall straight to the generic
+   reply. This adds a lightweight typo-correction pass that only kicks in
+   when nothing matched, so it never overrides a confident regex hit.
+   NOTE: this is NOT true semantic understanding — it corrects near-miss
+   spellings of known keywords (e.g. "shft"->"shift", "manger"->"manager").
+   Real free-form semantic comprehension would need an actual NLU/LLM
+   backend call, which this static, client-only kiosk page doesn't have
+   wired up (no server or API key is configured here). */
+var FUZZY_WORDS=['shift','manager','department','leave','holiday','off','agency','company',
+    'joining','phone','birthday','hours','timing','pickup','email','country','language',
+    'tenure','contract','joke','time','date','help','thanks','bye','hello','hi'];
+function levenshtein(a,b){
+    var m=a.length,n=b.length,d=[];
+    for(var i=0;i<=m;i++)d[i]=[i];
+    for(var j=0;j<=n;j++)d[0][j]=j;
+    for(var i=1;i<=m;i++)for(var j=1;j<=n;j++){
+        d[i][j]=a[i-1]===b[j-1]?d[i-1][j-1]:1+Math.min(d[i-1][j],d[i][j-1],d[i-1][j-1]);
+    }
+    return d[m][n];
+}
+function fuzzyCorrect(t){
+    return t.split(' ').map(function(w){
+        if(w.length<3) return w;
+        var best=null,bestD=99;
+        FUZZY_WORDS.forEach(function(fw){
+            var d=levenshtein(w,fw);
+            if(d<bestD){bestD=d;best=fw;}
+        });
+        var tolerance=w.length>5?2:1;
+        return (best&&bestD>0&&bestD<=tolerance)?best:w;
+    }).join(' ');
+}
+// Wrapper: retry once with fuzzy-corrected text if the strict matcher
+// only produced the generic fallback reply.
+function getResponseSmart(text){
+    var r=getResponse(text);
+    if(r&&r.fallback){
+        var corrected=fuzzyCorrect(norm(text));
+        if(corrected!==norm(text)){
+            var r2=getResponse(corrected);
+            if(r2&&!r2.fallback) return r2;
+        }
+    }
+    return r;
+}
+
+/* ===== AI ===== */
+function getResponse(text){
+    var t=norm(text),N=userName,s=userStaff,g=trGreet(),a=tr('and')||'and',nf=tr('not_found')||"I don't have that info";
+    // Leave / Off day
+    if(/(leave|chutti|off day|day off|week off|when.+off|my off|ijaza|bida|mapumziko|repos|avasham)/i.test(t)){
+        if(s){var txt=tr('your_off')?N+", "+tr('your_off')+" "+s.off1+" "+a+" "+s.off2+".":N+", your week off is "+s.off1+" and "+s.off2+".";
+            return{type:'ai',showcard:true,cardinfo:[['Week Off 1',s.off1],['Week Off 2',s.off2],['Shift',s.shift]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Shift
+    if(/(my shift|shift|kya shift|mera shift|meri shift|wardiyya|zamu|quart)/i.test(t)&&!/(timing|time|samay|waqt)/i.test(t)){
+        if(s){var txt=tr('your_shift')?N+", "+tr('your_shift')+" "+s.shift+".":N+", you are on "+s.shift+".";
+            return{type:'ai',showcard:true,cardinfo:[['Shift',s.shift],['Off Days',s.off1+' & '+s.off2],['Department',s.dept]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Manager
+    if(/(manager|boss|supervisor|line manager|mera manager|kaun hai manager|mudir|meneja|responsable)/i.test(t)){
+        if(s){var txt=tr('your_manager')?N+", "+tr('your_manager')+" "+s.manager+".":N+", your manager is "+s.manager+".";
+            return{type:'ai',showcard:true,cardinfo:[['Manager',s.manager],['Department',s.dept],['Shift',s.shift]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Department
+    if(/(department|dept|vibhaag|mera department|qism|idara|departement)/i.test(t)){
+        if(s){var txt=tr('your_dept')?N+", "+tr('your_dept')+" "+s.dept+".":N+", your department is "+s.dept+".";
+            return{type:'ai',showcard:true,cardinfo:[['Department',s.dept],['Manager',s.manager],['Shift',s.shift]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Agency / Company / 3P
+    if(/(company|agency|3p|contractor|meri company|meri agency|wakala|agence)/i.test(t)){
+        if(s){var txt=tr('your_agency')?N+", "+tr('your_agency')+" "+s.company+".":N+", your agency is "+s.company+".";
+            return{type:'ai',showcard:true,cardinfo:[['Agency',s.company],['Department',s.dept],['Shift',s.shift]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // DOJ
+    if(/(date of joining|joining date|doj|when.+join|kab join|tarikh)/i.test(t)){
+        if(s){var txt=tr('your_doj')?N+", "+tr('your_doj')+" "+s.doj+".":N+", your date of joining is "+s.doj+".";
+            return{type:'ai',showcard:true,cardinfo:[['Date of Joining',s.doj],['Agency',s.company],['Department',s.dept]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Phone
+    if(/(phone|number|contact|mera number|nambari|simu|telephone)/i.test(t)){
+        if(s&&s.phone){var txt=tr('your_phone')?N+", "+tr('your_phone')+" "+s.phone+".":N+", your phone number is "+s.phone+".";
+            return{type:'ai',showcard:true,cardinfo:[['Phone',s.phone],['Department',s.dept],['Shift',s.shift]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Birthday
+    if(/(birthday|birth month|janamdin|milad)/i.test(t)){
+        if(s&&s.birthday){var txt=tr('your_birthday')?N+", "+tr('your_birthday')+" "+s.birthday+".":N+", your birthday month is "+s.birthday+".";
+            return{type:'ai',showcard:true,cardinfo:[['Birthday Month',s.birthday],['Department',s.dept],['Shift',s.shift]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Working hours
+    if(/(working hours|how many hours|hours|kitne ghante|ghanta|saat|masaa)/i.test(t)){
+        if(s&&s.hours){var txt=tr('your_hours')?N+", "+tr('your_hours')+" "+s.hours+".":N+", your working hours are "+s.hours+".";
+            return{type:'ai',showcard:true,cardinfo:[['Working Hours',s.hours],['Shift',s.shift],['Shift Timings',s.shift_time||'\u2014']],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Shift timing
+    if(/(shift timing|shift time|timing|samay|waqt|wakati)/i.test(t)){
+        if(s&&s.shift_time){var txt=tr('your_timing')?N+", "+tr('your_timing')+" "+s.shift_time+".":N+", your shift timing is "+s.shift_time+".";
+            return{type:'ai',showcard:true,cardinfo:[['Shift Timings',s.shift_time],['Shift',s.shift],['Working Hours',s.hours||'\u2014']],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Pickup / Address
+    if(/(pickup|transport|bus|drop|address|accommodation|camp|where.+live|ghar|makan)/i.test(t)){
+        if(s&&s.pickup){var txt=tr('your_pickup')?N+", "+tr('your_pickup')+" "+s.pickup+".":N+", your pickup point is "+s.pickup+".";
+            return{type:'ai',showcard:true,cardinfo:[['Pickup Point',s.pickup],['Shift',s.shift],['Agency',s.company]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Email
+    if(/(email|e-mail|barua pepe)/i.test(t)){
+        if(s&&s.email){var txt=tr('your_email')?N+", "+tr('your_email')+" "+s.email+".":N+", your email is "+s.email+".";
+            return{type:'ai',showcard:true,cardinfo:[['Email',s.email],['Phone',s.phone||'\u2014'],['Department',s.dept]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Country
+    if(/(country|home country|nationality|where.+from|desh|mulk|balad|nchi|bansa)/i.test(t)){
+        if(s&&s.country){var txt=tr('your_country')?N+", "+tr('your_country')+" "+s.country+".":N+", your home country is "+s.country+".";
+            return{type:'ai',showcard:true,cardinfo:[['Home Country',s.country],['Language',s.language||'\u2014'],['Department',s.dept]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Language
+    if(/(language|bhaasha|zubaan|lugha|wika)/i.test(t)){
+        if(s&&s.language){var txt=tr('your_language')?N+", "+tr('your_language')+" "+s.language+".":N+", your language is "+s.language+".";
+            return{type:'ai',showcard:true,cardinfo:[['Language',s.language],['Home Country',s.country||'\u2014'],['Department',s.dept]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Tenure / Contract
+    if(/(tenure|contract|aqd|mkataba|kontrata)/i.test(t)){
+        if(s&&s.tenure_end&&s.tenure_end!=='nan'){var txt=tr('your_tenure')?N+", "+tr('your_tenure')+" "+s.tenure_end+".":N+", your tenure end date is "+s.tenure_end+".";
+            return{type:'ai',showcard:true,cardinfo:[['Tenure End',s.tenure_end],['DOJ',s.doj],['Agency',s.company]],text:txt};}
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // My info / all details
+    if(/(my info|my detail|my record|about me|my data|meri detail|mera record|sab batao)/i.test(t)){
+        if(s)return{type:'card',text:N+"! "+(tr('your_shift')||"Shift")+": "+s.shift+". "+(tr('your_off')||"Week off")+": "+s.off1+" "+a+" "+s.off2+". "+(tr('your_dept')||"Department")+": "+s.dept+"."};
+        return{type:'ai',text:N+", "+nf+"."};
+    }
+    // Greetings
+    if(/\b(hi|hello|hey|salam|assalam|namaste|namaskaram|habari|bonjour)\b/i.test(t))return{type:'ai',text:g+", "+N+"! "+(tr('how_are')||pick(["How are you?","What's up?","Welcome!"]))};
+    if(/(how are you|kaise ho|kya haal|kya hal|kayf halak|kaisa hai)/i.test(t))return{type:'ai',text:tr('how_are')||pick(["Great "+N+"!","Fantastic "+N+"!","100% "+N+"!"])};
+    if(/(who are you|your name|kaun ho|tumhara naam)/i.test(t))return{type:'ai',text:"PXT Hub, "+N+"!"};
+    // Capabilities — previously listed only 4-5 items; now enumerates
+    // every data field this kiosk can actually answer from the roster,
+    // built dynamically instead of a hardcoded short list.
+    if(/(what can you do|help|madad|sahayam|kya kar sakte|capabilit|features|what.+know)/i.test(t)){
+        var CAPS=['your shift','week off / leave days','department','manager','agency or company',
+            'date of joining','phone number','birthday month','working hours','shift timing',
+            'pickup point','email address','home country','language on file','contract/tenure end date',
+            'the current time','today\'s date','a joke if you need one'];
+        var intro=tr('how_help')||("Here's everything I can help you with, "+N+":");
+        return{type:'ai',text:intro+" You can ask me about: "+CAPS.join(", ")+"."};
+    }
+    if(/(what time|time kya|waqt|kitne baje)/i.test(t))return{type:'ai',text:timeStr()+", "+N+"."};
+    if(/(what date|what day|today|aaj|tarikh)/i.test(t))return{type:'ai',text:dateStr()+", "+N+"."};
+    if(/\b(thank|thanks|shukriya|dhanyavaad|nanni|asante|merci|shukran)\b/i.test(t))return{type:'ai',text:tr('thanks')||pick(["Welcome "+N+"!","No problem "+N+"!","Anytime "+N+"!"])};
+    if(/\b(bye|goodbye|see you|take care|alvida|khuda hafiz|kwaheri|vida)\b/i.test(t))return{type:'bye',text:tr('bye')||"Goodbye "+N+"! Say Hi PXT when you need me!"};
+    if(/(joke|funny|laugh|bored|mazak|hansi)/i.test(t))return{type:'ai',text:tr('joke')||pick(["Why did the employee bring a ladder? To reach new heights!","HR's favorite music? Staff notation!","Calendar stressed? Its days were numbered!"])};
+    if(/(tired|sad|stressed|thaka|dukhi)/i.test(t))return{type:'ai',text:g+", "+N+"!"};
+    if(/(happy|excited|great|awesome|khush|accha)/i.test(t))return{type:'ai',text:g+", "+N+"!"};
+    return{type:'ai',fallback:true,text:tr('how_help')||pick(["Try 'my shift', 'my week off', or 'my manager', "+N+"!",N+", ask me anything!","I'm here "+N+"!"])};
+}
+
+/* ===== RECOGNITION — instant restart, no gaps ===== */
+function stopListening(){
+    listening=false;clearTimeout(restartTimeout);clearTimeout(silenceTimer);
+    if(rec){try{rec.abort();}catch(e){}rec=null;}setMic(false);
+}
+
+function startListening(){
+    if(!shouldRun||speaking||listening)return;
+    stopListening();
+    rec=new SR();
+    rec.continuous=false;
+    rec.interimResults=true;
+    rec.lang='en-US'; // Always listen in English — responses will be in native language
+    rec.maxAlternatives=1;
+    var wakeHandled=false;
+
+    rec.onstart=function(){
+        listening=true;setMic(true);
+        if(state==='sleep'){log('Waiting for "Hi PXT"...');setStatus("","Say \"Hi PXT\" to wake me up");setPill("Say \"Hi PXT\"");}
+        else if(state==='wake_listen'){log('Say your name...');setStatus("","tell me your name");setPill("Your name?");}
+        else if(state==='lang_choose'){log('Choose language...');setStatus("","English or "+userNativeName+"?");setPill("English or "+userNativeName+"?");}
+        else{log('Listening...');setStatus("","listening");setPill("Listening...");}
+    };
+    rec.onend=function(){
+        listening=false;setMic(false);
+        if(shouldRun&&!speaking) restartTimeout=setTimeout(startListening,50);
+    };
+    rec.onerror=function(e){
+        listening=false;setMic(false);
+        if(e.error==='not-allowed'){log('Mic blocked');return;}
+        if(shouldRun&&!speaking) restartTimeout=setTimeout(startListening,50);
+    };
+    rec.onresult=function(ev){
+        lastActivity=Date.now();
+        var txt="";
+        for(var i=ev.resultIndex;i<ev.results.length;i++) txt+=ev.results[i][0].transcript;
+        log('Heard: '+txt);
+
+        // SLEEP: check for wake word (interim OK for speed)
+        if(state==='sleep'){
+            if(!wakeHandled && isWakeWord(txt)){
+                wakeHandled=true;
+                try{rec.stop();}catch(e){}
+                handleWake();
+            }
+            return; // Never process anything else in sleep mode
+        }
+
+        // If wake just handled this session, ignore leftover results
+        if(wakeHandled) return;
+
+        // LOGIN / READY: only act on final results
+        var last=ev.results[ev.results.length-1];
+        if(last && last.isFinal){
+            var final_txt=last[0].transcript.trim();
+            if(final_txt.length<2) return;
+            if(state==='wake_listen') handleLogin(final_txt);
+            else if(state==='lang_choose') handleLangChoice(final_txt);
+            else if(state==='ready') handleInput(final_txt);
+        }
+    };
+
+    try{rec.start();}catch(e){listening=false;restartTimeout=setTimeout(startListening,100);}
+}
+
+/* ===== HANDLERS ===== */
+function handleWake(){
+    stopListening();state='wake_listen';
+    // Show badge input
+    var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='block';
+    var bi=document.getElementById('badgeInput');if(bi){bi.value='';bi.focus();}
+    speak(timeGreet()+"! Welcome to PXT Hub. Please enter your badge number.",function(){startListening();});
+}
+
+function handleLogin(text){
+    stopListening();hideCard();
+    var digits=text.replace(/[^0-9]/g,"");
+    var staff=null;
+    var name=text.trim();
+    if(digits.length>=5) staff=findByBadge(digits);
+    if(!staff){name=extractName(text);staff=findStaff(name)||findStaff(text);}
+    if(staff){
+        userName=staff.name.split(" ")[0];userStaff=staff;
+        userLang='en';userNativeName='';
+        var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
+        // Check if staff has a native language
+        var nativeLang=extractNativeLang(staff.language);
+        if(nativeLang){
+            userNativeName=nativeLang.name;
+            state='lang_choose';
+            speak(timeGreet()+", "+staff.name+"! Welcome to PXT Hub. Would you like to continue in English or "+nativeLang.name+"?",
+                function(){startListening();});
+        } else {
+            state='ready';
+            speak(timeGreet()+", "+staff.name+"! Welcome to PXT Hub. How can I help you today?",
+                function(){setTimeout(hideCard,4000);resetSleepTimer();startListening();});
+        }
+    } else if(digits.length>=5){
+        var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='block';
+        var bi=document.getElementById('badgeInput');if(bi){bi.value='';bi.focus();}
+        speak("Sorry, badge "+digits+" was not found. Please check and try again.",function(){state='wake_listen';startListening();});
+    } else {
+        userName=name;userStaff=null;state='ready';
+        var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
+        speak(timeGreet()+", "+userName+"! I couldn't find your record. Please try your badge number instead.",
+            function(){resetSleepTimer();startListening();});
+    }
+}
+
+function handleLangChoice(text){
+    stopListening();
+    var t=norm(text);
+    var nativeLang=extractNativeLang(userStaff.language);
+    if(nativeLang && (t.indexOf(nativeLang.name.toLowerCase())>=0 || t.indexOf('native')>=0 || t.indexOf('my language')>=0 || t.indexOf('second')>=0 || t.indexOf('other')>=0)){
+        userLang=nativeLang.code;
+        state='ready';
+        speak(nativeLang.greet+", "+userName+"! "+nativeLang.name+" selected. How can I help you?",
+            function(){resetSleepTimer();startListening();},nativeLang.tts);
+    } else {
+        userLang='en';
+        state='ready';
+        speak("English it is, "+userName+"! How can I help you today?",
+            function(){resetSleepTimer();startListening();});
+    }
+}
+/* ===== EXPLICIT LANGUAGE SWITCH (mid-conversation) =====
+   Previously there was no way to change language once picked at login —
+   userLang only ever changed at handleLangChoice() or on sleep/reset.
+   That's actually why it "never reverted", but it also meant a user could
+   never say "switch to English" later; unmatched attempts just fell
+   through to the generic response. This adds that explicit command
+   without touching persistence for anything else. */
+function detectLangSwitchRequest(text){
+    var t=norm(text);
+    if(!/(switch|change|speak|talk|reply|answer|continue|go back)/.test(t)) return null;
+    if(/\benglish\b/.test(t)) return {code:'en',name:'English'};
+    for(var key in LANG_MAP){
+        if(t.indexOf(key)>=0){
+            var L=LANG_MAP[key];
+            return {code:L.code,name:L.name,tts:L.tts,greet:L.greet};
+        }
+    }
+    return null;
+}
+
+function handleInput(text){
+    stopListening();hideCard();clearTimeout(sleepTimer);
+    if(state==='ready'){
+        var sw=detectLangSwitchRequest(text);
+        if(sw){
+            userLang=sw.code;userNativeName=sw.code==='en'?'':sw.name;
+            var msg=sw.code==='en'
+                ? ("English it is, "+userName+"! How can I help you today?")
+                : (sw.greet+", "+userName+"! "+sw.name+" selected. How can I help you?");
+            speak(msg,function(){resetSleepTimer();startListening();},sw.tts);
+            return;
+        }
+    }
+    var r=getResponseSmart(text);
+    setTimeout(function(){
+        if(r.type==='bye'){speak(r.text,function(){goToSleep();});return;}
+        if(r.type==='card'&&userStaff){showCard(userStaff,r.cardinfo);speak(r.text,function(){setTimeout(hideCard,4000);resetSleepTimer();startListening();});}
+        else if(r.type==='ai'&&userStaff&&r.showcard){showCard(userStaff,r.cardinfo);speak(r.text,function(){setTimeout(hideCard,4000);resetSleepTimer();startListening();});}
+        else{speak(r.text,function(){resetSleepTimer();startListening();});}
+    },200);
+}
+
+/* ===== WATCHDOG ===== */
+setInterval(function(){
+    if(!speaking&&shouldRun&&!listening){
+        log("Restarting mic...");lastActivity=Date.now();startListening();
+    }
+},3000);
+
+/* ===== VISIBILITY — restart when tab becomes visible ===== */
+document.addEventListener('visibilitychange',function(){
+    if(!document.hidden&&shouldRun&&!speaking&&!listening){
+        log("Tab visible — restarting");setTimeout(startListening,300);
+    }
+});
+
+/* ===== START ===== */
+startBtn.onclick=async function(){
+    if(testStream){testStream.getTracks().forEach(function(t){t.stop();});}if(testMeter){testMeter.stop();}
+    $('startOverlay').style.display='none';$('kiosk').style.display='flex';
+    if(VIDEO_SRC){bgVideo.src=VIDEO_SRC;bgVideo.style.display="block";bgVideo.muted=false;bgVideo.volume=0.12;
+        bgVideo.play().then(function(){if(bgGrad)bgGrad.style.display="none";}).catch(function(){bgVideo.muted=true;bgVideo.play().catch(function(){});});}
+    try{var w=new SpeechSynthesisUtterance(' ');w.volume=0;if(chosenVoice)w.voice=chosenVoice;window.speechSynthesis.speak(w);}catch(e){}
+    try{var c=selectedDeviceId?{audio:{deviceId:{exact:selectedDeviceId}}}:{audio:true};
+        micStream=await navigator.mediaDevices.getUserMedia(c);
+        log('Mic: '+(micStream.getAudioTracks()[0].label||'?'));
+        state='sleep';
+        speak("PXT Hub ready! Say Hi PXT whenever you need me.",function(){startListening();});
+    }catch(e){log('Mic error');setStatus("Mic failed","Refresh page");}
+};
+
+window.addEventListener('beforeunload',function(){shouldRun=false;stopListening();try{window.speechSynthesis.cancel();}catch(e){}});
+loadMics();
+})();
+</script>
+</body>
+</html>
