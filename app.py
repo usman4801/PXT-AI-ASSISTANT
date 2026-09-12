@@ -1,24 +1,23 @@
 """
 PXT Hub - AI Voice Kiosk
-Serves kiosk on localhost. Reads staff data from data.xlsx (Roster sheet).
+Serves kiosk UI directly without HTTP Server (Streamlit Cloud Compatible)
 """
-import json, os, socket, threading
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+import json, os
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir(APP_DIR)
 ADMIN_PASSWORD = "pxt123"
-KIOSK_PORT = 8769
 VIDEO_URL = "banner.mp4"
 DATA_FILE = "data.xlsx"
 
-st.set_page_config(page_title="PXT Hub", page_icon="\U0001f399\ufe0f", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PXT Hub", page_icon="🎙️", layout="wide", initial_sidebar_state="collapsed")
 
 def load_staff_data():
     if not os.path.exists(DATA_FILE):
-        st.warning("data.xlsx not found in PXT_Hub folder")
+        st.warning("data.xlsx not found in project folder")
         return []
     try:
         df = pd.read_excel(DATA_FILE, sheet_name="Roster", dtype=str).fillna("")
@@ -53,20 +52,7 @@ def load_staff_data():
         st.error(f"Error reading data.xlsx: {e}")
         return []
 
-class Q(SimpleHTTPRequestHandler):
-    def __init__(self, *a, **kw): super().__init__(*a, directory=APP_DIR, **kw)
-    def log_message(self, *_): pass
-
-def is_port_in_use(p):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(("127.0.0.1", p)) == 0
-
-def start_server():
-    if is_port_in_use(KIOSK_PORT): return
-    t = threading.Thread(target=HTTPServer(("0.0.0.0", KIOSK_PORT), Q).serve_forever, daemon=True)
-    t.start()
-
-# CSS
+# Hide Streamlit Default UI
 st.markdown("""<style>
 #MainMenu,footer,header{display:none!important;}
 [data-testid="stToolbar"],[data-testid="stStatusWidget"],[data-testid="stDecoration"],
@@ -77,9 +63,9 @@ html,body,[data-testid="stAppViewContainer"]{background:#05070c;overflow:hidden;
 [data-testid="stSidebar"]{background:#0a0d14;}
 </style>""", unsafe_allow_html=True)
 
-# Admin
+# Admin Panel
 with st.sidebar:
-    st.markdown("### \U0001f512 PXT Admin")
+    st.markdown("### 🔒 PXT Admin")
     pwd = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Admin password")
     if pwd == ADMIN_PASSWORD:
         st.success("Access granted")
@@ -96,19 +82,19 @@ with st.sidebar:
             st.dataframe(pd.DataFrame(staff).head(20), use_container_width=True, height=300)
     elif pwd: st.error("Wrong password")
 
-# Build kiosk
+# Load Data and Prepare Template
 staff = load_staff_data()
 sj = json.dumps(staff, ensure_ascii=False)
 
-kiosk_path = os.path.join(APP_DIR, "kiosk.html")
 tmpl_path = os.path.join(APP_DIR, "kiosk_template.html")
+html_content = ""
+
 if os.path.exists(tmpl_path):
-    with open(tmpl_path, "r", encoding="utf-8") as f: tmpl = f.read()
-    tmpl = tmpl.replace("__STAFF__", sj).replace("__VIDEO__", VIDEO_URL)
-    with open(kiosk_path, "w", encoding="utf-8") as f: f.write(tmpl)
+    with open(tmpl_path, "r", encoding="utf-8") as f:
+        tmpl = f.read()
+    html_content = tmpl.replace("__STAFF__", sj).replace("__VIDEO__", VIDEO_URL)
+else:
+    html_content = "<h2>kiosk_template.html missing!</h2>"
 
-start_server()
-
-st.markdown(f"""<iframe src="http://localhost:{KIOSK_PORT}/kiosk.html"
-allow="microphone;autoplay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;border:none;z-index:1;"></iframe>""",
-unsafe_allow_html=True)
+# Render directly using Streamlit HTML component
+components.html(html_content, height=1000, scrolling=False)
