@@ -321,7 +321,7 @@ KIOSK_TEMPLATE = r"""<!DOCTYPE html>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;color:#eaf6ff;}
-.kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
+.kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;overflow:hidden;padding-bottom:110px;}
 .bg-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center;z-index:0;opacity:.85;}
 .bg-grad{position:absolute;inset:0;z-index:0;
     background:radial-gradient(circle at 20% 30%,rgba(0,180,255,.15),transparent 45%),
