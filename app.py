@@ -749,7 +749,7 @@ function wakeUp(){
                 log("Wake timeout - returning to sleep");
                 speak("No Badge ID received. Going back to sleep.",function(){goToSleep();});
             }
-        },22000);
+        },45000);
     });
 }
 
@@ -786,10 +786,35 @@ function extractBadgeFromSpeech(raw){
    with or without a badge. */
 var IDENTITY_MSG="Hi! I'm PXT AI Assistant, your smart HR support assistant. I'm here to help employees with HR-related questions, workplace information, policies, benefits, leave, attendance, and other employee-support needs. Think of me as your virtual HR companion, available to provide quick, simple, and helpful answers whenever you need them. How can I assist you today?";
 
+/* All the different ways someone might ask "who/what are you" or "what
+   can you do for me" or "what's your benefit to me" etc. Kept as one
+   shared list (instead of separate copies) so both the pre-login and
+   post-login handlers recognize the same wide range of phrasings. */
+var IDENTITY_PHRASES=[
+    "who are you","who r u","who is this","what are you","what is this",
+    "what is pxt","whats pxt","who is pxt","what's pxt",
+    "your name","what is your name","whats your name",
+    "what can you do","what can you do for me","what do you do",
+    "what do you do for me","what can you help","how can you help",
+    "how can you help me","what help can you give","what help can you provide",
+    "how do you help","how do you help me",
+    "what is your benefit","whats your benefit","what is your benefits",
+    "what are your benefits","your benefit","your benefits",
+    "benefit of you","benefits of you","benefit of pxt","benefits of pxt",
+    "what is your purpose","whats your purpose","your purpose",
+    "why are you here","what are you for","what are you used for",
+    "tell me about yourself","tell me about pxt","introduce yourself",
+    "introduce pxt","what is your function","what is your role",
+    "explain yourself","explain pxt"
+];
+function isIdentityQuery(n){
+    return matchAny(n, IDENTITY_PHRASES);
+}
+
 /* Quick answers during wake_listen ("who are you", "what can you do") */
 function handlePreLoginQuery(raw){
     var n=norm(raw);
-    if(n.indexOf("who are you")>=0 || n.indexOf("what are you")>=0 || n.indexOf("your name")>=0 || n.indexOf("what can you do")>=0 || n.indexOf("tell me about yourself")>=0){
+    if(isIdentityQuery(n)){
         speak(IDENTITY_MSG, function(){startListening();});
         return true;
     }
@@ -875,9 +900,10 @@ function handleQuery(raw){
         return;
     }
 
-    // Identity / introduction - "who are you", "what can you do for me", etc.
-    // Checked early, same wording whether or not the employee is logged in.
-    if(matchAny(n,["who are you","what are you","your name","what can you do","tell me about yourself"])){
+    // Identity / introduction - "who are you", "what can you do for me",
+    // "what's your benefit", etc. Checked early, same wording whether or
+    // not the employee is logged in (shared IDENTITY_PHRASES list).
+    if(isIdentityQuery(n)){
         speak(IDENTITY_MSG,function(){startListening();});
         return;
     }
