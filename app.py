@@ -341,10 +341,35 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 .mic-label{font-size:10px;color:#7fd0ef;letter-spacing:1px;text-transform:uppercase;}
 .debug{color:#5fa8c4;font-size:10.5px;background:rgba(10,16,26,.5);padding:4px 12px;border-radius:999px;border:1px solid rgba(80,200,255,.15);max-width:50vw;text-align:center;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
-.pulse-ring{position:relative;z-index:2;width:110px;height:110px;border-radius:50%;border:2px solid rgba(0,190,255,.25);display:flex;align-items:center;justify-content:center;margin-bottom:24px;}
-.pulse-ring.active{animation:pulse 2s ease-in-out infinite;}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,190,255,.3)}50%{box-shadow:0 0 0 22px rgba(0,190,255,0)}}
-.pulse-ring .icon{font-size:42px;}
+.top-greet{position:fixed;top:52px;left:22px;z-index:5;text-align:left;max-width:62vw;}
+.top-greet .tg1{font-size:15px;font-weight:600;color:#eaf6ff;letter-spacing:.2px;}
+.top-greet .tg2{font-size:12px;color:rgba(200,225,240,.55);margin-top:3px;}
+
+/* Assistant brand title/subtitle - shown below the face, above the mic bar */
+.assistant-title{position:relative;z-index:2;font-size:23px;font-weight:700;color:#eaf6ff;text-align:center;margin-bottom:6px;letter-spacing:.2px;}
+.assistant-title .accent{background:linear-gradient(90deg,#57d9ff,#9a7bff);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.assistant-sub{position:relative;z-index:2;font-size:12.5px;color:rgba(180,210,230,.55);text-align:center;margin-bottom:22px;}
+
+/* Compact mic button with a "weaving" waveform either side, so the
+   employee gets clear visual feedback that the mic is actively picking
+   up their voice (vs. the old always-static big center icon). */
+.mic-bar{position:relative;z-index:2;display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:14px;}
+.wave{display:flex;align-items:center;gap:3px;height:34px;}
+.wave .bar{width:3px;border-radius:3px;height:6px;opacity:.3;transition:opacity .3s;}
+#waveLeft .bar{background:linear-gradient(180deg,#57d9ff,#3b82f6);}
+#waveRight .bar{background:linear-gradient(180deg,#ff6ec7,#c66bff);}
+.wave.active .bar{opacity:.95;animation:wavebounce 1s ease-in-out infinite;}
+.wave .bar:nth-child(2){animation-delay:.08s;}
+.wave .bar:nth-child(3){animation-delay:.16s;}
+.wave .bar:nth-child(4){animation-delay:.24s;}
+.wave .bar:nth-child(5){animation-delay:.12s;}
+.wave .bar:nth-child(6){animation-delay:.2s;}
+.wave .bar:nth-child(7){animation-delay:.04s;}
+@keyframes wavebounce{0%,100%{height:6px;}50%{height:28px;}}
+.mic-btn{width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;border:none;box-shadow:none;transition:all .3s;flex-shrink:0;}
+.mic-btn .icon{font-size:22px;filter:drop-shadow(0 0 5px rgba(90,150,255,.6));}
+.mic-btn.active{box-shadow:0 0 22px rgba(90,150,255,.45);animation:micpulse 1.5s ease-in-out infinite;}
+@keyframes micpulse{0%,100%{box-shadow:0 0 18px rgba(90,150,255,.35);}50%{box-shadow:0 0 30px rgba(90,150,255,.7);}}
 
 .status-display{position:relative;z-index:2;text-align:center;max-width:500px;padding:0 20px;}
 .status-main{font-size:13px;font-weight:400;color:rgba(234,246,255,.6);min-height:18px;transition:all .3s;letter-spacing:.3px;line-height:1.5;}
@@ -417,7 +442,21 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
         <div class="debug" id="debug">&nbsp;</div>
         <div class="theme-dots" id="themeDots"></div>
     </div>
-    <div class="pulse-ring" id="pulseRing"><div class="icon">🎙️</div></div>
+    <div class="top-greet" id="topGreet">
+        <div class="tg1" id="tgLine1">Good Day 👋</div>
+        <div class="tg2">How can I help you today?</div>
+    </div>
+    <div class="assistant-title">I'm Your <span class="accent">PXT</span> AI Assistant</div>
+    <div class="assistant-sub">You can ask me anything or give a command.</div>
+    <div class="mic-bar">
+        <div class="wave" id="waveLeft">
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        </div>
+        <div class="mic-btn" id="micBtn"><div class="icon">🎙️</div></div>
+        <div class="wave" id="waveRight">
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        </div>
+    </div>
     <!-- Badge ID input for manual entry (RFID later) -->
     <div id="badgeWrap" style="position:relative;z-index:2;display:none;margin-bottom:16px;">
         <div style="display:flex;align-items:center;gap:8px;">
@@ -449,7 +488,8 @@ var THEMES=__THEMES__; // [{name, src(data-uri)}, ...] background theme videos
 var $=function(id){return document.getElementById(id);};
 var micDot=$('micDot'),micLabel=$('micLabel'),debug=$('debug');
 var statusMain=$('statusMain'),statusSub=$('statusSub');
-var pulseRing=$('pulseRing'),p1=$('p1');
+var micBtn=$('micBtn'),waveLeft=$('waveLeft'),waveRight=$('waveRight'),tgLine1=$('tgLine1');
+var p1=$('p1');
 var bgVideo=$('bgVideo'),bgGrad=$('bgGrad');
 var rcard=$('rcard'),rn=$('rn'),ri=$('ri'),rv1=$('rv1'),rv2=$('rv2'),rv3=$('rv3'),rl1=$('rl1'),rl2=$('rl2'),rl3=$('rl3');
 var micSelect=$('micSelect'),testFill=$('testFill'),testLabel=$('testLabel'),startBtn=$('startBtn');
@@ -518,9 +558,19 @@ voicePreview.onclick=function(){try{window.speechSynthesis.cancel();}catch(e){}v
 function norm(s){return(s||"").toLowerCase().trim().replace(/[^a-z0-9\s]/g,"").replace(/\s+/g," ");}
 function pick(a){return a[Math.floor(Math.random()*a.length)];}
 function log(m){debug.textContent=m;}
-function setMic(on){micDot.classList.toggle('on',on);micLabel.textContent=on?'LISTENING':'MIC OFF';pulseRing.classList.toggle('active',on);}
+function setMic(on){
+    micDot.classList.toggle('on',on);
+    micLabel.textContent=on?'LISTENING':'MIC OFF';
+    micBtn.classList.toggle('active',on);
+    waveLeft.classList.toggle('active',on);
+    waveRight.classList.toggle('active',on);
+}
 function setStatus(m,s){statusMain.textContent=m||'';statusSub.textContent=s||'';}
 function setPill(t){p1.textContent=t;}
+function updateGreeting(){
+    var g=timeGreet();
+    tgLine1.textContent=userName?(g+", "+userName+" \ud83d\udc4b"):(g+" \ud83d\udc4b");
+}
 function hideCard(){rcard.classList.remove('show');}
 function showCard(s,cardInfo){
     rn.textContent=s.name;ri.textContent='Badge: '+s.id;
@@ -618,6 +668,7 @@ function goToSleep(){
     clearTimeout(sleepTimer);clearTimeout(wakeTimeoutTimer);
     hideCard();
     var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
+    updateGreeting();
     setStatus("Say \"Hi PXT\" to wake me up","Listening in background...");
     setPill("PXT Hub • Sleeping");
     log("Status: Sleeping");
@@ -713,6 +764,7 @@ function handleLogin(badgeVal){
     userStaff=found;
     userName=found.name;
     state='ready';
+    updateGreeting();
 
     log("Logged in as: "+userName+" ("+found.id+")");
     showCard(found);
@@ -867,8 +919,9 @@ function handleQuery(raw){
         return;
     }
 
-    // Fallback: polite response
-    speak("I heard: "+raw+". You can ask me about your shift, off days, department, manager, or pickup point.",function(){startListening();});
+    // Fallback: the topic isn't something we track, or wasn't understood -
+    // say so plainly rather than parroting back what was heard.
+    speak("I don't have that information. You can ask me about your shift, off days, job title, department, manager, pickup point, phone, email, or joining date.",function(){startListening();});
 }
 
 /* ===== MAIN SPEECH RECOGNITION LOOP =====
