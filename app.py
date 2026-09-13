@@ -13,8 +13,7 @@ CHANGELOG (this revision):
    re-asks instead of logging someone in under a misheard name. A
    20-25s "wake timeout" also puts the kiosk back to sleep if nobody
    enters a badge in time. While waiting for a badge, "who are you" /
-   "what can you do" (and the same after logging in) get the same
-   PXT AI Assistant introduction, answered directly without needing a login.
+   "what can you do" are answered directly without needing a login.
 2) Background theme video(s) are now embedded as base64 data URIs
    instead of a plain relative <video src>. Streamlit's components.html
    renders the kiosk inside a sandboxed iframe, so a relative filename
@@ -37,13 +36,7 @@ import streamlit.components.v1 as components
 # 0. CONFIG
 # ----------------------------------------------------------------------
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-# Reads ADMIN_PASSWORD from st.secrets when a secrets.toml is configured,
-# otherwise falls back to the original default so nothing breaks for
-# anyone who hasn't set up secrets yet.
-try:
-    ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "pxt123")
-except Exception:
-    ADMIN_PASSWORD = "pxt123"
+ADMIN_PASSWORD = "pxt123"  # NOTE: for production, move this to st.secrets
 
 st.set_page_config(
     page_title="PXT Hub Kiosk",
@@ -328,7 +321,7 @@ KIOSK_TEMPLATE = r"""<!DOCTYPE html>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;color:#eaf6ff;}
-.kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;overflow:hidden;padding-bottom:12px;}
+.kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
 .bg-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center;z-index:0;opacity:.85;}
 .bg-grad{position:absolute;inset:0;z-index:0;
     background:radial-gradient(circle at 20% 30%,rgba(0,180,255,.15),transparent 45%),
@@ -348,49 +341,27 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 .mic-label{font-size:10px;color:#7fd0ef;letter-spacing:1px;text-transform:uppercase;}
 .debug{color:#5fa8c4;font-size:10.5px;background:rgba(10,16,26,.5);padding:4px 12px;border-radius:999px;border:1px solid rgba(80,200,255,.15);max-width:50vw;text-align:center;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
-.pulse-ring{display:none;}
-
-/* Top-left greeting, matching the reference layout (no user name shown here). */
-.top-greet{position:fixed;top:52px;left:20px;z-index:5;text-align:left;}
-.top-greet .g1{font-size:16px;font-weight:600;color:#eaf6ff;}
-.top-greet .g2{font-size:12px;color:rgba(234,246,255,.55);margin-top:3px;}
-.top-greet .g3{font-size:11px;color:rgba(127,208,239,.7);margin-top:10px;background:rgba(10,16,26,.55);border:1px solid rgba(80,200,255,.2);padding:5px 12px;border-radius:999px;display:inline-block;}
-
-/* Headline block above the voice widget */
-.headline{position:relative;z-index:2;text-align:center;margin-bottom:16px;padding:0 20px;}
-.headline h1{font-size:24px;font-weight:700;color:#eaf6ff;letter-spacing:.2px;}
-.headline h1 .hl{color:#8b7cff;}
-.headline p{font-size:13px;color:rgba(143,184,207,.8);margin-top:6px;}
-
-/* Small mic + waveform widget (replaces the old big pulse-ring icon) */
-.voice-widget{position:relative;z-index:2;display:flex;align-items:center;justify-content:center;gap:14px;background:rgba(15,22,34,.55);border:1px solid rgba(90,210,255,.18);border-radius:22px;padding:18px 26px;backdrop-filter:blur(10px);margin-bottom:8px;}
-.wave-bars{display:flex;align-items:center;gap:3px;height:34px;min-width:150px;}
-.wave-bars .bar{width:3px;border-radius:2px;background:linear-gradient(180deg,#3ecbff,#7c8fff);height:6px;transition:height .15s ease;}
-.wave-bars.right .bar{background:linear-gradient(180deg,#b06bff,#ff6bd8);}
-.wave-bars.active .bar{animation:wavebar 900ms ease-in-out infinite;}
-@keyframes wavebar{0%,100%{height:6px;}50%{height:30px;}}
-.wave-bars .wave-label{display:none;font-size:12px;font-weight:500;color:#9fd8ef;white-space:nowrap;}
-.wave-bars.right .wave-label{color:#e2b6ff;}
-.wave-bars.text-mode .bar{display:none;}
-.wave-bars.text-mode .wave-label{display:block;}
-.wave-bars.left.text-mode{justify-content:flex-end;}
-.wave-bars.right.text-mode{justify-content:flex-start;}
-
-.mic-small{position:relative;width:54px;height:54px;border-radius:50%;border:2px solid rgba(90,150,255,.6);display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(20,40,80,.4);box-shadow:0 0 16px rgba(70,140,255,.25);transition:all .25s;}
-.mic-small.active{animation:micGlow 1.6s ease-in-out infinite;border-color:rgba(120,190,255,.9);}
-@keyframes micGlow{0%,100%{box-shadow:0 0 18px rgba(70,180,255,.5);}50%{box-shadow:0 0 34px rgba(70,210,255,.95);}}
-.mic-small .blink-dot{position:absolute;top:1px;right:1px;width:11px;height:11px;border-radius:50%;background:#46ffb0;box-shadow:0 0 8px rgba(70,255,176,.9);opacity:0;transition:opacity .2s;border:2px solid #05070c;}
-.mic-small.active .blink-dot{opacity:1;animation:blinkDot 1s ease-in-out infinite;}
-@keyframes blinkDot{0%,100%{opacity:1;}50%{opacity:.2;}}
-.mic-small svg{width:20px;height:20px;}
+.pulse-ring{position:relative;z-index:2;width:110px;height:110px;border-radius:50%;border:2px solid rgba(0,190,255,.25);display:flex;align-items:center;justify-content:center;margin-bottom:24px;}
+.pulse-ring.active{animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,190,255,.3)}50%{box-shadow:0 0 0 22px rgba(0,190,255,0)}}
+.pulse-ring .icon{font-size:42px;}
 
 .status-display{position:relative;z-index:2;text-align:center;max-width:500px;padding:0 20px;}
 .status-main{font-size:13px;font-weight:400;color:rgba(234,246,255,.6);min-height:18px;transition:all .3s;letter-spacing:.3px;line-height:1.5;}
 .status-sub{font-size:11px;color:rgba(127,208,239,.5);min-height:14px;transition:all .3s;margin-top:4px;}
 
-.login-badge{position:relative;z-index:2;text-align:center;font-size:12px;color:rgba(159,216,239,.85);letter-spacing:.3px;margin-top:4px;min-height:16px;}
+.rcard{position:relative;z-index:2;background:rgba(15,22,34,.75);border:1px solid rgba(90,210,255,.25);border-radius:20px;padding:24px 32px;backdrop-filter:blur(14px);text-align:center;box-shadow:0 0 30px rgba(0,150,255,.1);margin-top:18px;animation:pop .4s ease;display:none;}
+.rcard.show{display:block;}
+.rcard .rn{font-size:20px;font-weight:700;margin-bottom:3px;}
+.rcard .ri{font-size:11px;letter-spacing:2px;color:#7fd8ff;opacity:.7;margin-bottom:14px;text-transform:uppercase;}
+.rcard .rg{display:flex;justify-content:space-around;gap:14px;flex-wrap:wrap;}
+.rcard .rg .ri-item .lbl{font-size:9px;letter-spacing:1.5px;color:#8fb8cf;text-transform:uppercase;margin-bottom:3px;}
+.rcard .rg .ri-item .val{font-size:16px;font-weight:600;}
 .c-pres{color:#4dffb0;} .c-abs{color:#ff6767;} .c-oth{color:#ffd166;}
 @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+.pill{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:4;padding:8px 22px;border-radius:999px;background:rgba(10,16,26,.6);border:1px solid rgba(80,200,255,.2);backdrop-filter:blur(10px);text-align:center;max-width:90vw;}
+.pill .p1{color:rgba(223,245,255,.7);font-size:11px;font-weight:500;letter-spacing:.4px;}
 
 /* Start overlay */
 .start-overlay{position:fixed;inset:0;z-index:100;background:rgba(5,7,12,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;backdrop-filter:blur(6px);}
@@ -446,26 +417,6 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
         <div class="debug" id="debug">&nbsp;</div>
         <div class="theme-dots" id="themeDots"></div>
     </div>
-    <div class="top-greet" id="topGreet">
-        <div class="g1" id="greetLine1">Good Afternoon 👋</div>
-        <div class="g2">How can I help you today?</div>
-        <div class="g3" id="p1">PXT Hub</div>
-    </div>
-    <div class="headline">
-        <h1>I'm Your PXT <span class="hl">AI</span> Assistant</h1>
-        <p>You can ask me anything or give a command.</p>
-    </div>
-    <div class="voice-widget" id="voiceWidget">
-        <div class="wave-bars left" id="waveLeft"><div class="wave-label" id="waveLeftLabel"></div></div>
-        <div class="mic-small" id="micSmall">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" stroke="#7fd0ef" stroke-width="1.6"/>
-                <path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="#7fd0ef" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
-            <div class="blink-dot"></div>
-        </div>
-        <div class="wave-bars right" id="waveRight"><div class="wave-label" id="waveRightLabel"></div></div>
-    </div>
     <div class="pulse-ring" id="pulseRing"><div class="icon">🎙️</div></div>
     <!-- Badge ID input for manual entry (RFID later) -->
     <div id="badgeWrap" style="position:relative;z-index:2;display:none;margin-bottom:16px;">
@@ -480,7 +431,15 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
         <div class="status-main" id="statusMain"></div>
         <div class="status-sub" id="statusSub"></div>
     </div>
-    <div class="login-badge" id="loginBadge"></div>
+    <div class="rcard" id="rcard">
+        <div class="rn" id="rn"></div><div class="ri" id="ri"></div>
+        <div class="rg">
+            <div class="ri-item"><div class="lbl" id="rl1">Shift</div><div class="val" id="rv1"></div></div>
+            <div class="ri-item"><div class="lbl" id="rl2">Off Days</div><div class="val" id="rv2"></div></div>
+            <div class="ri-item"><div class="lbl" id="rl3">Department</div><div class="val" id="rv3"></div></div>
+        </div>
+    </div>
+    <div class="pill"><div class="p1" id="p1">PXT Hub</div></div>
 </div>
 
 <script>
@@ -491,10 +450,8 @@ var $=function(id){return document.getElementById(id);};
 var micDot=$('micDot'),micLabel=$('micLabel'),debug=$('debug');
 var statusMain=$('statusMain'),statusSub=$('statusSub');
 var pulseRing=$('pulseRing'),p1=$('p1');
-var micSmall=$('micSmall'),waveLeft=$('waveLeft'),waveRight=$('waveRight');
-var waveLeftLabel=$('waveLeftLabel'),waveRightLabel=$('waveRightLabel'),greetLine1=$('greetLine1');
 var bgVideo=$('bgVideo'),bgGrad=$('bgGrad');
-var loginBadge=$('loginBadge');
+var rcard=$('rcard'),rn=$('rn'),ri=$('ri'),rv1=$('rv1'),rv2=$('rv2'),rv3=$('rv3'),rl1=$('rl1'),rl2=$('rl2'),rl3=$('rl3');
 var micSelect=$('micSelect'),testFill=$('testFill'),testLabel=$('testLabel'),startBtn=$('startBtn');
 var voiceSelect=$('voiceSelect'),voicePreview=$('voicePreview');
 
@@ -561,62 +518,15 @@ voicePreview.onclick=function(){try{window.speechSynthesis.cancel();}catch(e){}v
 function norm(s){return(s||"").toLowerCase().trim().replace(/[^a-z0-9\s]/g,"").replace(/\s+/g," ");}
 function pick(a){return a[Math.floor(Math.random()*a.length)];}
 function log(m){debug.textContent=m;}
-
-/* Build the animated waveform bars once (random heights/delays so the
-   two sides don't pulse in perfect lock-step - it "weaves" like the
-   reference screenshot). Only the CSS animation runs continuously;
-   we just toggle the .active class on/off depending on mic state. */
-function buildWaveBars(container,count){
-    if(!container)return;
-    for(var i=0;i<count;i++){
-        var b=document.createElement('div');
-        b.className='bar';
-        b.style.animationDelay=(Math.random()*0.9).toFixed(2)+'s';
-        b.style.animationDuration=(0.6+Math.random()*0.6).toFixed(2)+'s';
-        container.appendChild(b);
-    }
-}
-buildWaveBars(waveLeft,14);
-buildWaveBars(waveRight,14);
-
-function setMic(on){
-    micDot.classList.toggle('on',on);
-    micLabel.textContent=on?'LISTENING':'MIC OFF';
-    pulseRing.classList.toggle('active',on);
-    if(micSmall)micSmall.classList.toggle('active',on);
-    if(waveLeft)waveLeft.classList.toggle('active',on);
-    if(waveRight)waveRight.classList.toggle('active',on);
-}
+function setMic(on){micDot.classList.toggle('on',on);micLabel.textContent=on?'LISTENING':'MIC OFF';pulseRing.classList.toggle('active',on);}
 function setStatus(m,s){statusMain.textContent=m||'';statusSub.textContent=s||'';}
-
-/* Puts short instructional text directly in place of the waveform bars
-   (used only while the kiosk is asleep, waiting for the wake word) -
-   e.g. "Say 'Hi PXT'" on the left, "to wake me up" on the right. */
-function setWavePrompt(leftText,rightText){
-    if(waveLeft){waveLeft.classList.add('text-mode');}
-    if(waveRight){waveRight.classList.add('text-mode');}
-    if(waveLeftLabel)waveLeftLabel.textContent=leftText||'';
-    if(waveRightLabel)waveRightLabel.textContent=rightText||'';
-}
-function clearWavePrompt(){
-    if(waveLeft)waveLeft.classList.remove('text-mode');
-    if(waveRight)waveRight.classList.remove('text-mode');
-}
-
-/* Top-left greeting text (time-of-day only - no user name shown here). */
-function updateGreeting(){
-    if(greetLine1) greetLine1.textContent=timeGreet()+" 👋";
-}
-updateGreeting();
-setInterval(updateGreeting,60000);
 function setPill(t){p1.textContent=t;}
-/* Replaces the old big employee-details card with one small line of text
-   ("Badge: 12345 • Logged in") so the layout doesn't shift/grow after
-   login - full details (shift, off days, etc.) are still available by
-   asking, and are spoken + shown in the status caption above. */
-function hideCard(){if(loginBadge)loginBadge.textContent='';}
-function showCard(s){
-    if(loginBadge)loginBadge.textContent='Badge: '+s.id+' • Logged in';
+function hideCard(){rcard.classList.remove('show');}
+function showCard(s,cardInfo){
+    rn.textContent=s.name;ri.textContent='Badge: '+s.id;
+    if(cardInfo){rl1.textContent=cardInfo[0][0];rv1.textContent=cardInfo[0][1];rv1.className='val c-pres';rl2.textContent=cardInfo[1][0];rv2.textContent=cardInfo[1][1];rl3.textContent=cardInfo[2][0];rv3.textContent=cardInfo[2][1];}
+    else{rl1.textContent='Shift';rv1.textContent=s.shift||'—';rv1.className='val c-pres';rl2.textContent='Off Days';rv2.textContent=(s.off1||'')+' & '+(s.off2||'');rl3.textContent='Department';rv3.textContent=s.dept||'—';}
+    rcard.classList.add('show');
 }
 
 /* ===== MIC SETUP ===== */
@@ -660,26 +570,15 @@ function speak(text,cb){
     setTimeout(fin,Math.max(text.length*100,3000)+5000);
 }
 
-/* ===== BADGE LOOKUP =====
-   BUG FIX: this used to check exact-match and partial-match together in
-   a single pass over STAFF. That meant a loose partial match on an
-   EARLIER row could short-circuit the loop and return the wrong
-   employee, even when the TRUE exact match existed further down the
-   list. Exact match must always win, so it now gets its own full pass
-   over the whole list before partial matching is even attempted. */
+/* ===== BADGE LOOKUP ===== */
 function findByBadge(id){
     id=id.trim();
-    // Pass 1: exact ID match, checked across the ENTIRE staff list first.
     for(var i=0;i<STAFF.length;i++){
-        if(String(STAFF[i].id).trim()===id) return STAFF[i];
-    }
-    // Pass 2: only if no exact match anywhere, fall back to a loose
-    // partial / last-6-digits match.
-    if(id.length>=6){
-        for(var j=0;j<STAFF.length;j++){
-            var sid=String(STAFF[j].id).trim();
-            if(sid.indexOf(id)>=0 || sid.slice(-6)===id.slice(-6)) return STAFF[j];
-        }
+        var sid=String(STAFF[i].id).trim();
+        if(sid===id)return STAFF[i];
+        // Partial match (last 6 digits)
+        if(id.length>=6 && sid.indexOf(id)>=0)return STAFF[i];
+        if(id.length>=6 && sid.slice(-6)===id.slice(-6))return STAFF[i];
     }
     return null;
 }
@@ -719,8 +618,7 @@ function goToSleep(){
     clearTimeout(sleepTimer);clearTimeout(wakeTimeoutTimer);
     hideCard();
     var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
-    setStatus("","");
-    setWavePrompt('Say "Hi PXT"','to wake me up');
+    setStatus("Say \"Hi PXT\" to wake me up","Listening in background...");
     setPill("PXT Hub • Sleeping");
     log("Status: Sleeping");
     startListening();
@@ -730,7 +628,6 @@ function wakeUp(){
     state='wake_listen';
     clearTimeout(wakeTimeoutTimer);
     hideCard();
-    clearWavePrompt();
     var bw=document.getElementById('badgeWrap');
     if(bw){
         bw.style.display='block';
@@ -749,7 +646,7 @@ function wakeUp(){
                 log("Wake timeout - returning to sleep");
                 speak("No Badge ID received. Going back to sleep.",function(){goToSleep();});
             }
-        },45000);
+        },22000);
     });
 }
 
@@ -781,44 +678,14 @@ function extractBadgeFromSpeech(raw){
     return null;
 }
 
-/* Shared "who are you / what can you do" introduction, used both before
-   login (wake_listen) and after login (ready) - anyone can ask this,
-   with or without a badge. */
-var IDENTITY_MSG="Hi! I'm PXT AI Assistant, your smart HR support assistant. I'm here to help employees with HR-related questions, workplace information, policies, benefits, leave, attendance, and other employee-support needs. Think of me as your virtual HR companion, available to provide quick, simple, and helpful answers whenever you need them. How can I assist you today?";
-
-/* All the different ways someone might ask "who/what are you" or "what
-   can you do for me" or "what's your benefit to me" etc. Kept as one
-   shared list (instead of separate copies) so both the pre-login and
-   post-login handlers recognize the same wide range of phrasings. */
-var IDENTITY_PHRASES=[
-    "who are you","who r u","who is this","what are you","what is this",
-    "what is pxt","whats pxt","who is pxt","what's pxt",
-    "your name","what is your name","whats your name",
-    "what can you do","what can you do for me","what do you do",
-    "what do you do for me","what can you help","how can you help",
-    "how can you help me","what help can you give","what help can you provide",
-    "how do you help","how do you help me",
-    "what is your benefit","whats your benefit","what is your benefits",
-    "what are your benefits","your benefit","your benefits",
-    "benefit of you","benefits of you","benefit of pxt","benefits of pxt",
-    "what is your purpose","whats your purpose","your purpose",
-    "why are you here","what are you for","what are you used for",
-    "tell me about yourself","tell me about pxt","introduce yourself",
-    "introduce pxt","what is your function","what is your role",
-    "explain yourself","explain pxt"
-];
-function isIdentityQuery(n){
-    return matchAny(n, IDENTITY_PHRASES);
-}
-
 /* Quick answers during wake_listen ("who are you", "what can you do") */
 function handlePreLoginQuery(raw){
     var n=norm(raw);
-    if(isIdentityQuery(n)){
-        speak(IDENTITY_MSG, function(){startListening();});
+    if(n.indexOf("who are you")>=0 || n.indexOf("what are you")>=0 || n.indexOf("your name")>=0){
+        speak("I am PXT Hub, your voice assistant. Please state your Badge ID number so I can help you.", function(){startListening();});
         return true;
     }
-    if(n.indexOf("help")>=0 || n.indexOf("options")>=0){
+    if(n.indexOf("what can you do")>=0 || n.indexOf("help")>=0 || n.indexOf("options")>=0){
         speak("I can check your shift, off days, department, manager, and details. Please state your Badge ID number to get started.", function(){startListening();});
         return true;
     }
@@ -897,14 +764,6 @@ function handleQuery(raw){
     // Logout / Bye
     if(matchAny(n,["bye","goodbye","exit","logout","log out","done","thank","that will be all","see you"])){
         speak("Goodbye "+userName+"! Have a great day ahead.",function(){goToSleep();});
-        return;
-    }
-
-    // Identity / introduction - "who are you", "what can you do for me",
-    // "what's your benefit", etc. Checked early, same wording whether or
-    // not the employee is logged in (shared IDENTITY_PHRASES list).
-    if(isIdentityQuery(n)){
-        speak(IDENTITY_MSG,function(){startListening();});
         return;
     }
 
@@ -1002,24 +861,14 @@ function handleQuery(raw){
         return;
     }
 
-    // Help / Options (specific list of what to ask - identity questions
-    // like "what can you do" are handled earlier by IDENTITY_MSG)
-    if(matchAny(n,["help","options","menu"])){
+    // Help / Options
+    if(matchAny(n,["help","what can you do","options","menu"])){
         speak("You can ask me about your shift, off days, job title, department, manager, pickup point, phone number, email, or joining date.",function(){startListening();});
         return;
     }
 
-    // Fields the kiosk does not track at all (e.g. T-shirt / uniform size).
-    // Rather than guessing or staying silent, say plainly that the info
-    // isn't available and invite another question.
-    if(matchAny(n,["t shirt size","tshirt size","shirt size","uniform size","dress size","shoe size"])){
-        speak("I'm sorry, I don't have that information available. Please ask me something else, like your shift, off days, or department.",function(){startListening();});
-        return;
-    }
-
-    // Fallback: the query didn't match anything we track - say so
-    // plainly instead of just echoing back what was heard.
-    speak("I'm sorry, I don't have that information available. You can ask me about your shift, off days, department, manager, or pickup point.",function(){startListening();});
+    // Fallback: polite response
+    speak("I heard: "+raw+". You can ask me about your shift, off days, department, manager, or pickup point.",function(){startListening();});
 }
 
 /* ===== MAIN SPEECH RECOGNITION LOOP =====
@@ -1073,25 +922,16 @@ function startListening(){
         }
     };
 
-    /* BUG FIX: onerror used to schedule its own restart AND onend also
-       scheduled a restart (for the sleep state). Since the Web Speech
-       API always fires onend right after onerror, this queued up TWO
-       overlapping startListening() calls (one ~500ms out, one ~1000ms
-       out). The second call would abort() the recognizer the first one
-       had just started, so the mic kept getting torn down and rebuilt
-       every ~0.5-1s - especially disruptive while sleeping and trying
-       to catch the wake word. Restart is now scheduled in exactly one
-       place (onend, which always fires), so there's a single, predictable
-       restart per listening cycle. */
     rec.onerror=function(e){
         listening=false;setMic(false);
         if(e.error!=='no-speech'&&e.error!=='aborted') log("Mic error: "+e.error);
+        if(!speaking) setTimeout(startListening,1000);
     };
 
     rec.onend=function(){
         listening=false;setMic(false);
-        if(!speaking){
-            setTimeout(startListening, state==='sleep' ? 500 : 300);
+        if(!speaking&&state==='sleep'){
+            setTimeout(startListening,500);
         }
     };
 
