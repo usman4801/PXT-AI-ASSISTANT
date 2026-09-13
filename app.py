@@ -321,7 +321,7 @@ KIOSK_TEMPLATE = r"""<!DOCTYPE html>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;color:#eaf6ff;}
-.kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;overflow:hidden;padding-bottom:36px;}
+.kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;overflow:hidden;padding-bottom:12px;}
 .bg-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center;z-index:0;opacity:.85;}
 .bg-grad{position:absolute;inset:0;z-index:0;
     background:radial-gradient(circle at 20% 30%,rgba(0,180,255,.15),transparent 45%),
@@ -369,8 +369,12 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 .wave-bars.left.text-mode{justify-content:flex-end;}
 .wave-bars.right.text-mode{justify-content:flex-start;}
 
-.mic-small{width:54px;height:54px;border-radius:50%;border:2px solid rgba(90,150,255,.6);display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(20,40,80,.4);box-shadow:0 0 16px rgba(70,140,255,.25);transition:all .25s;}
-.mic-small.active{box-shadow:0 0 22px rgba(70,180,255,.55);border-color:rgba(120,190,255,.9);}
+.mic-small{position:relative;width:54px;height:54px;border-radius:50%;border:2px solid rgba(90,150,255,.6);display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(20,40,80,.4);box-shadow:0 0 16px rgba(70,140,255,.25);transition:all .25s;}
+.mic-small.active{animation:micGlow 1.6s ease-in-out infinite;border-color:rgba(120,190,255,.9);}
+@keyframes micGlow{0%,100%{box-shadow:0 0 18px rgba(70,180,255,.5);}50%{box-shadow:0 0 34px rgba(70,210,255,.95);}}
+.mic-small .blink-dot{position:absolute;top:1px;right:1px;width:11px;height:11px;border-radius:50%;background:#46ffb0;box-shadow:0 0 8px rgba(70,255,176,.9);opacity:0;transition:opacity .2s;border:2px solid #05070c;}
+.mic-small.active .blink-dot{opacity:1;animation:blinkDot 1s ease-in-out infinite;}
+@keyframes blinkDot{0%,100%{opacity:1;}50%{opacity:.2;}}
 .mic-small svg{width:20px;height:20px;}
 
 .status-display{position:relative;z-index:2;text-align:center;max-width:500px;padding:0 20px;}
@@ -457,6 +461,7 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
                 <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" stroke="#7fd0ef" stroke-width="1.6"/>
                 <path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="#7fd0ef" stroke-width="1.6" stroke-linecap="round"/>
             </svg>
+            <div class="blink-dot"></div>
         </div>
         <div class="wave-bars right" id="waveRight"><div class="wave-label" id="waveRightLabel"></div></div>
     </div>
