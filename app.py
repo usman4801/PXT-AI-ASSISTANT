@@ -341,10 +341,34 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 .mic-label{font-size:10px;color:#7fd0ef;letter-spacing:1px;text-transform:uppercase;}
 .debug{color:#5fa8c4;font-size:10.5px;background:rgba(10,16,26,.5);padding:4px 12px;border-radius:999px;border:1px solid rgba(80,200,255,.15);max-width:50vw;text-align:center;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
-.pulse-ring{position:relative;z-index:2;width:110px;height:110px;border-radius:50%;border:2px solid rgba(0,190,255,.25);display:flex;align-items:center;justify-content:center;margin-bottom:24px;}
-.pulse-ring.active{animation:pulse 2s ease-in-out infinite;}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,190,255,.3)}50%{box-shadow:0 0 0 22px rgba(0,190,255,0)}}
-.pulse-ring .icon{font-size:42px;}
+.pulse-ring{display:none;}
+
+/* Top-left greeting, matching the reference layout (no user name shown here). */
+.top-greet{position:fixed;top:52px;left:20px;z-index:5;text-align:left;}
+.top-greet .g1{font-size:16px;font-weight:600;color:#eaf6ff;}
+.top-greet .g2{font-size:12px;color:rgba(234,246,255,.55);margin-top:3px;}
+
+/* Headline block above the voice widget */
+.headline{position:relative;z-index:2;text-align:center;margin-bottom:16px;padding:0 20px;}
+.headline h1{font-size:24px;font-weight:700;color:#eaf6ff;letter-spacing:.2px;}
+.headline h1 .hl{color:#8b7cff;}
+.headline p{font-size:13px;color:rgba(143,184,207,.8);margin-top:6px;}
+
+/* Small mic + waveform widget (replaces the old big pulse-ring icon) */
+.voice-widget{position:relative;z-index:2;display:flex;align-items:center;justify-content:center;gap:14px;background:rgba(15,22,34,.55);border:1px solid rgba(90,210,255,.18);border-radius:22px;padding:18px 26px;backdrop-filter:blur(10px);margin-bottom:8px;}
+.wave-bars{display:flex;align-items:center;gap:3px;height:34px;}
+.wave-bars .bar{width:3px;border-radius:2px;background:linear-gradient(180deg,#3ecbff,#7c8fff);height:6px;transition:height .15s ease;}
+.wave-bars.right .bar{background:linear-gradient(180deg,#b06bff,#ff6bd8);}
+.wave-bars.active .bar{animation:wavebar 900ms ease-in-out infinite;}
+@keyframes wavebar{0%,100%{height:6px;}50%{height:30px;}}
+
+.mic-small{width:54px;height:54px;border-radius:50%;border:2px solid rgba(90,150,255,.6);display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(20,40,80,.4);box-shadow:0 0 16px rgba(70,140,255,.25);transition:all .25s;}
+.mic-small.active{box-shadow:0 0 22px rgba(70,180,255,.55);border-color:rgba(120,190,255,.9);}
+.mic-small svg{width:20px;height:20px;}
+
+.voice-sub{position:relative;z-index:2;text-align:center;margin-bottom:6px;min-height:34px;}
+.voice-sub .vs1{font-size:13px;font-weight:600;color:#7fd0ef;}
+.voice-sub .vs2{font-size:11px;color:rgba(234,246,255,.5);margin-top:2px;}
 
 .status-display{position:relative;z-index:2;text-align:center;max-width:500px;padding:0 20px;}
 .status-main{font-size:13px;font-weight:400;color:rgba(234,246,255,.6);min-height:18px;transition:all .3s;letter-spacing:.3px;line-height:1.5;}
@@ -417,6 +441,28 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
         <div class="debug" id="debug">&nbsp;</div>
         <div class="theme-dots" id="themeDots"></div>
     </div>
+    <div class="top-greet" id="topGreet">
+        <div class="g1" id="greetLine1">Good Afternoon 👋</div>
+        <div class="g2">How can I help you today?</div>
+    </div>
+    <div class="headline">
+        <h1>I'm Your PXT <span class="hl">AI</span> Assistant</h1>
+        <p>You can ask me anything or give a command.</p>
+    </div>
+    <div class="voice-widget" id="voiceWidget">
+        <div class="wave-bars left" id="waveLeft"></div>
+        <div class="mic-small" id="micSmall">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" stroke="#7fd0ef" stroke-width="1.6"/>
+                <path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="#7fd0ef" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <div class="wave-bars right" id="waveRight"></div>
+    </div>
+    <div class="voice-sub">
+        <div class="vs1" id="vs1"></div>
+        <div class="vs2" id="vs2"></div>
+    </div>
     <div class="pulse-ring" id="pulseRing"><div class="icon">🎙️</div></div>
     <!-- Badge ID input for manual entry (RFID later) -->
     <div id="badgeWrap" style="position:relative;z-index:2;display:none;margin-bottom:16px;">
@@ -450,6 +496,8 @@ var $=function(id){return document.getElementById(id);};
 var micDot=$('micDot'),micLabel=$('micLabel'),debug=$('debug');
 var statusMain=$('statusMain'),statusSub=$('statusSub');
 var pulseRing=$('pulseRing'),p1=$('p1');
+var micSmall=$('micSmall'),waveLeft=$('waveLeft'),waveRight=$('waveRight');
+var vs1=$('vs1'),vs2=$('vs2'),greetLine1=$('greetLine1');
 var bgVideo=$('bgVideo'),bgGrad=$('bgGrad');
 var rcard=$('rcard'),rn=$('rn'),ri=$('ri'),rv1=$('rv1'),rv2=$('rv2'),rv3=$('rv3'),rl1=$('rl1'),rl2=$('rl2'),rl3=$('rl3');
 var micSelect=$('micSelect'),testFill=$('testFill'),testLabel=$('testLabel'),startBtn=$('startBtn');
@@ -518,8 +566,46 @@ voicePreview.onclick=function(){try{window.speechSynthesis.cancel();}catch(e){}v
 function norm(s){return(s||"").toLowerCase().trim().replace(/[^a-z0-9\s]/g,"").replace(/\s+/g," ");}
 function pick(a){return a[Math.floor(Math.random()*a.length)];}
 function log(m){debug.textContent=m;}
-function setMic(on){micDot.classList.toggle('on',on);micLabel.textContent=on?'LISTENING':'MIC OFF';pulseRing.classList.toggle('active',on);}
+
+/* Build the animated waveform bars once (random heights/delays so the
+   two sides don't pulse in perfect lock-step - it "weaves" like the
+   reference screenshot). Only the CSS animation runs continuously;
+   we just toggle the .active class on/off depending on mic state. */
+function buildWaveBars(container,count){
+    if(!container)return;
+    container.innerHTML='';
+    for(var i=0;i<count;i++){
+        var b=document.createElement('div');
+        b.className='bar';
+        b.style.animationDelay=(Math.random()*0.9).toFixed(2)+'s';
+        b.style.animationDuration=(0.6+Math.random()*0.6).toFixed(2)+'s';
+        container.appendChild(b);
+    }
+}
+buildWaveBars(waveLeft,14);
+buildWaveBars(waveRight,14);
+
+function setMic(on){
+    micDot.classList.toggle('on',on);
+    micLabel.textContent=on?'LISTENING':'MIC OFF';
+    pulseRing.classList.toggle('active',on);
+    if(micSmall)micSmall.classList.toggle('active',on);
+    if(waveLeft)waveLeft.classList.toggle('active',on);
+    if(waveRight)waveRight.classList.toggle('active',on);
+    if(vs1&&vs2){
+        if(on){vs1.textContent='Listening...';vs2.textContent='Speak now';}
+        else if(speaking){vs1.textContent='Speaking...';vs2.textContent='Please wait';}
+        else{vs1.textContent='';vs2.textContent='';}
+    }
+}
 function setStatus(m,s){statusMain.textContent=m||'';statusSub.textContent=s||'';}
+
+/* Top-left greeting text (time-of-day only - no user name shown here). */
+function updateGreeting(){
+    if(greetLine1) greetLine1.textContent=timeGreet()+" 👋";
+}
+updateGreeting();
+setInterval(updateGreeting,60000);
 function setPill(t){p1.textContent=t;}
 function hideCard(){rcard.classList.remove('show');}
 function showCard(s,cardInfo){
@@ -867,8 +953,17 @@ function handleQuery(raw){
         return;
     }
 
-    // Fallback: polite response
-    speak("I heard: "+raw+". You can ask me about your shift, off days, department, manager, or pickup point.",function(){startListening();});
+    // Fields the kiosk does not track at all (e.g. T-shirt / uniform size).
+    // Rather than guessing or staying silent, say plainly that the info
+    // isn't available and invite another question.
+    if(matchAny(n,["t shirt size","tshirt size","shirt size","uniform size","dress size","shoe size"])){
+        speak("I'm sorry, I don't have that information available. Please ask me something else, like your shift, off days, or department.",function(){startListening();});
+        return;
+    }
+
+    // Fallback: the query didn't match anything we track - say so
+    // plainly instead of just echoing back what was heard.
+    speak("I'm sorry, I don't have that information available. You can ask me about your shift, off days, department, manager, or pickup point.",function(){startListening();});
 }
 
 /* ===== MAIN SPEECH RECOGNITION LOOP =====
