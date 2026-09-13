@@ -13,7 +13,8 @@ CHANGELOG (this revision):
    re-asks instead of logging someone in under a misheard name. A
    20-25s "wake timeout" also puts the kiosk back to sleep if nobody
    enters a badge in time. While waiting for a badge, "who are you" /
-   "what can you do" are answered directly without needing a login.
+   "what can you do" (and the same after logging in) get the same
+   PXT AI Assistant introduction, answered directly without needing a login.
 2) Background theme video(s) are now embedded as base64 data URIs
    instead of a plain relative <video src>. Streamlit's components.html
    renders the kiosk inside a sandboxed iframe, so a relative filename
@@ -763,14 +764,19 @@ function extractBadgeFromSpeech(raw){
     return null;
 }
 
+/* Shared "who are you / what can you do" introduction, used both before
+   login (wake_listen) and after login (ready) - anyone can ask this,
+   with or without a badge. */
+var IDENTITY_MSG="Hi! I'm PXT AI Assistant, your smart HR support assistant. I'm here to help employees with HR-related questions, workplace information, policies, benefits, leave, attendance, and other employee-support needs. Think of me as your virtual HR companion, available to provide quick, simple, and helpful answers whenever you need them. How can I assist you today?";
+
 /* Quick answers during wake_listen ("who are you", "what can you do") */
 function handlePreLoginQuery(raw){
     var n=norm(raw);
-    if(n.indexOf("who are you")>=0 || n.indexOf("what are you")>=0 || n.indexOf("your name")>=0){
-        speak("I am PXT Hub, your voice assistant. Please state your Badge ID number so I can help you.", function(){startListening();});
+    if(n.indexOf("who are you")>=0 || n.indexOf("what are you")>=0 || n.indexOf("your name")>=0 || n.indexOf("what can you do")>=0 || n.indexOf("tell me about yourself")>=0){
+        speak(IDENTITY_MSG, function(){startListening();});
         return true;
     }
-    if(n.indexOf("what can you do")>=0 || n.indexOf("help")>=0 || n.indexOf("options")>=0){
+    if(n.indexOf("help")>=0 || n.indexOf("options")>=0){
         speak("I can check your shift, off days, department, manager, and details. Please state your Badge ID number to get started.", function(){startListening();});
         return true;
     }
@@ -849,6 +855,13 @@ function handleQuery(raw){
     // Logout / Bye
     if(matchAny(n,["bye","goodbye","exit","logout","log out","done","thank","that will be all","see you"])){
         speak("Goodbye "+userName+"! Have a great day ahead.",function(){goToSleep();});
+        return;
+    }
+
+    // Identity / introduction - "who are you", "what can you do for me", etc.
+    // Checked early, same wording whether or not the employee is logged in.
+    if(matchAny(n,["who are you","what are you","your name","what can you do","tell me about yourself"])){
+        speak(IDENTITY_MSG,function(){startListening();});
         return;
     }
 
@@ -946,8 +959,9 @@ function handleQuery(raw){
         return;
     }
 
-    // Help / Options
-    if(matchAny(n,["help","what can you do","options","menu"])){
+    // Help / Options (specific list of what to ask - identity questions
+    // like "what can you do" are handled earlier by IDENTITY_MSG)
+    if(matchAny(n,["help","options","menu"])){
         speak("You can ask me about your shift, off days, job title, department, manager, pickup point, phone number, email, or joining date.",function(){startListening();});
         return;
     }
