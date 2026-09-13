@@ -381,13 +381,7 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 .status-main{font-size:13px;font-weight:400;color:rgba(234,246,255,.6);min-height:18px;transition:all .3s;letter-spacing:.3px;line-height:1.5;}
 .status-sub{font-size:11px;color:rgba(127,208,239,.5);min-height:14px;transition:all .3s;margin-top:4px;}
 
-.rcard{position:relative;z-index:2;background:rgba(15,22,34,.75);border:1px solid rgba(90,210,255,.25);border-radius:20px;padding:24px 32px;backdrop-filter:blur(14px);text-align:center;box-shadow:0 0 30px rgba(0,150,255,.1);margin-top:18px;animation:pop .4s ease;display:none;}
-.rcard.show{display:block;}
-.rcard .rn{font-size:20px;font-weight:700;margin-bottom:3px;}
-.rcard .ri{font-size:11px;letter-spacing:2px;color:#7fd8ff;opacity:.7;margin-bottom:14px;text-transform:uppercase;}
-.rcard .rg{display:flex;justify-content:space-around;gap:14px;flex-wrap:wrap;}
-.rcard .rg .ri-item .lbl{font-size:9px;letter-spacing:1.5px;color:#8fb8cf;text-transform:uppercase;margin-bottom:3px;}
-.rcard .rg .ri-item .val{font-size:16px;font-weight:600;}
+.login-badge{position:relative;z-index:2;text-align:center;font-size:12px;color:rgba(159,216,239,.85);letter-spacing:.3px;margin-top:4px;min-height:16px;}
 .c-pres{color:#4dffb0;} .c-abs{color:#ff6767;} .c-oth{color:#ffd166;}
 @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 
@@ -479,14 +473,7 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
         <div class="status-main" id="statusMain"></div>
         <div class="status-sub" id="statusSub"></div>
     </div>
-    <div class="rcard" id="rcard">
-        <div class="rn" id="rn"></div><div class="ri" id="ri"></div>
-        <div class="rg">
-            <div class="ri-item"><div class="lbl" id="rl1">Shift</div><div class="val" id="rv1"></div></div>
-            <div class="ri-item"><div class="lbl" id="rl2">Off Days</div><div class="val" id="rv2"></div></div>
-            <div class="ri-item"><div class="lbl" id="rl3">Department</div><div class="val" id="rv3"></div></div>
-        </div>
-    </div>
+    <div class="login-badge" id="loginBadge"></div>
 </div>
 
 <script>
@@ -500,7 +487,7 @@ var pulseRing=$('pulseRing'),p1=$('p1');
 var micSmall=$('micSmall'),waveLeft=$('waveLeft'),waveRight=$('waveRight');
 var waveLeftLabel=$('waveLeftLabel'),waveRightLabel=$('waveRightLabel'),greetLine1=$('greetLine1');
 var bgVideo=$('bgVideo'),bgGrad=$('bgGrad');
-var rcard=$('rcard'),rn=$('rn'),ri=$('ri'),rv1=$('rv1'),rv2=$('rv2'),rv3=$('rv3'),rl1=$('rl1'),rl2=$('rl2'),rl3=$('rl3');
+var loginBadge=$('loginBadge');
 var micSelect=$('micSelect'),testFill=$('testFill'),testLabel=$('testLabel'),startBtn=$('startBtn');
 var voiceSelect=$('voiceSelect'),voicePreview=$('voicePreview');
 
@@ -616,12 +603,13 @@ function updateGreeting(){
 updateGreeting();
 setInterval(updateGreeting,60000);
 function setPill(t){p1.textContent=t;}
-function hideCard(){rcard.classList.remove('show');}
-function showCard(s,cardInfo){
-    rn.textContent=s.name;ri.textContent='Badge: '+s.id;
-    if(cardInfo){rl1.textContent=cardInfo[0][0];rv1.textContent=cardInfo[0][1];rv1.className='val c-pres';rl2.textContent=cardInfo[1][0];rv2.textContent=cardInfo[1][1];rl3.textContent=cardInfo[2][0];rv3.textContent=cardInfo[2][1];}
-    else{rl1.textContent='Shift';rv1.textContent=s.shift||'—';rv1.className='val c-pres';rl2.textContent='Off Days';rv2.textContent=(s.off1||'')+' & '+(s.off2||'');rl3.textContent='Department';rv3.textContent=s.dept||'—';}
-    rcard.classList.add('show');
+/* Replaces the old big employee-details card with one small line of text
+   ("Badge: 12345 • Logged in") so the layout doesn't shift/grow after
+   login - full details (shift, off days, etc.) are still available by
+   asking, and are spoken + shown in the status caption above. */
+function hideCard(){if(loginBadge)loginBadge.textContent='';}
+function showCard(s){
+    if(loginBadge)loginBadge.textContent='Badge: '+s.id+' • Logged in';
 }
 
 /* ===== MIC SETUP ===== */
