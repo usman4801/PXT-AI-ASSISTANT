@@ -321,7 +321,7 @@ KIOSK_TEMPLATE = r"""<!DOCTYPE html>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;color:#eaf6ff;}
-.kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;overflow:hidden;padding-bottom:110px;}
+.kiosk{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;overflow:hidden;padding-bottom:36px;}
 .bg-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center;z-index:0;opacity:.85;}
 .bg-grad{position:absolute;inset:0;z-index:0;
     background:radial-gradient(circle at 20% 30%,rgba(0,180,255,.15),transparent 45%),
@@ -347,6 +347,7 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 .top-greet{position:fixed;top:52px;left:20px;z-index:5;text-align:left;}
 .top-greet .g1{font-size:16px;font-weight:600;color:#eaf6ff;}
 .top-greet .g2{font-size:12px;color:rgba(234,246,255,.55);margin-top:3px;}
+.top-greet .g3{font-size:11px;color:rgba(127,208,239,.7);margin-top:10px;background:rgba(10,16,26,.55);border:1px solid rgba(80,200,255,.2);padding:5px 12px;border-radius:999px;display:inline-block;}
 
 /* Headline block above the voice widget */
 .headline{position:relative;z-index:2;text-align:center;margin-bottom:16px;padding:0 20px;}
@@ -356,19 +357,21 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 
 /* Small mic + waveform widget (replaces the old big pulse-ring icon) */
 .voice-widget{position:relative;z-index:2;display:flex;align-items:center;justify-content:center;gap:14px;background:rgba(15,22,34,.55);border:1px solid rgba(90,210,255,.18);border-radius:22px;padding:18px 26px;backdrop-filter:blur(10px);margin-bottom:8px;}
-.wave-bars{display:flex;align-items:center;gap:3px;height:34px;}
+.wave-bars{display:flex;align-items:center;gap:3px;height:34px;min-width:150px;}
 .wave-bars .bar{width:3px;border-radius:2px;background:linear-gradient(180deg,#3ecbff,#7c8fff);height:6px;transition:height .15s ease;}
 .wave-bars.right .bar{background:linear-gradient(180deg,#b06bff,#ff6bd8);}
 .wave-bars.active .bar{animation:wavebar 900ms ease-in-out infinite;}
 @keyframes wavebar{0%,100%{height:6px;}50%{height:30px;}}
+.wave-bars .wave-label{display:none;font-size:12px;font-weight:500;color:#9fd8ef;white-space:nowrap;}
+.wave-bars.right .wave-label{color:#e2b6ff;}
+.wave-bars.text-mode .bar{display:none;}
+.wave-bars.text-mode .wave-label{display:block;}
+.wave-bars.left.text-mode{justify-content:flex-end;}
+.wave-bars.right.text-mode{justify-content:flex-start;}
 
 .mic-small{width:54px;height:54px;border-radius:50%;border:2px solid rgba(90,150,255,.6);display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(20,40,80,.4);box-shadow:0 0 16px rgba(70,140,255,.25);transition:all .25s;}
 .mic-small.active{box-shadow:0 0 22px rgba(70,180,255,.55);border-color:rgba(120,190,255,.9);}
 .mic-small svg{width:20px;height:20px;}
-
-.voice-sub{position:relative;z-index:2;text-align:center;margin-bottom:6px;min-height:34px;}
-.voice-sub .vs1{font-size:13px;font-weight:600;color:#7fd0ef;}
-.voice-sub .vs2{font-size:11px;color:rgba(234,246,255,.5);margin-top:2px;}
 
 .status-display{position:relative;z-index:2;text-align:center;max-width:500px;padding:0 20px;}
 .status-main{font-size:13px;font-weight:400;color:rgba(234,246,255,.6);min-height:18px;transition:all .3s;letter-spacing:.3px;line-height:1.5;}
@@ -383,9 +386,6 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 .rcard .rg .ri-item .val{font-size:16px;font-weight:600;}
 .c-pres{color:#4dffb0;} .c-abs{color:#ff6767;} .c-oth{color:#ffd166;}
 @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
-
-.pill{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:4;padding:8px 22px;border-radius:999px;background:rgba(10,16,26,.6);border:1px solid rgba(80,200,255,.2);backdrop-filter:blur(10px);text-align:center;max-width:90vw;}
-.pill .p1{color:rgba(223,245,255,.7);font-size:11px;font-weight:500;letter-spacing:.4px;}
 
 /* Start overlay */
 .start-overlay{position:fixed;inset:0;z-index:100;background:rgba(5,7,12,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;backdrop-filter:blur(6px);}
@@ -444,24 +444,21 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
     <div class="top-greet" id="topGreet">
         <div class="g1" id="greetLine1">Good Afternoon 👋</div>
         <div class="g2">How can I help you today?</div>
+        <div class="g3" id="p1">PXT Hub</div>
     </div>
     <div class="headline">
         <h1>I'm Your PXT <span class="hl">AI</span> Assistant</h1>
         <p>You can ask me anything or give a command.</p>
     </div>
     <div class="voice-widget" id="voiceWidget">
-        <div class="wave-bars left" id="waveLeft"></div>
+        <div class="wave-bars left" id="waveLeft"><div class="wave-label" id="waveLeftLabel"></div></div>
         <div class="mic-small" id="micSmall">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" stroke="#7fd0ef" stroke-width="1.6"/>
                 <path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="#7fd0ef" stroke-width="1.6" stroke-linecap="round"/>
             </svg>
         </div>
-        <div class="wave-bars right" id="waveRight"></div>
-    </div>
-    <div class="voice-sub">
-        <div class="vs1" id="vs1"></div>
-        <div class="vs2" id="vs2"></div>
+        <div class="wave-bars right" id="waveRight"><div class="wave-label" id="waveRightLabel"></div></div>
     </div>
     <div class="pulse-ring" id="pulseRing"><div class="icon">🎙️</div></div>
     <!-- Badge ID input for manual entry (RFID later) -->
@@ -485,7 +482,6 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
             <div class="ri-item"><div class="lbl" id="rl3">Department</div><div class="val" id="rv3"></div></div>
         </div>
     </div>
-    <div class="pill"><div class="p1" id="p1">PXT Hub</div></div>
 </div>
 
 <script>
@@ -497,7 +493,7 @@ var micDot=$('micDot'),micLabel=$('micLabel'),debug=$('debug');
 var statusMain=$('statusMain'),statusSub=$('statusSub');
 var pulseRing=$('pulseRing'),p1=$('p1');
 var micSmall=$('micSmall'),waveLeft=$('waveLeft'),waveRight=$('waveRight');
-var vs1=$('vs1'),vs2=$('vs2'),greetLine1=$('greetLine1');
+var waveLeftLabel=$('waveLeftLabel'),waveRightLabel=$('waveRightLabel'),greetLine1=$('greetLine1');
 var bgVideo=$('bgVideo'),bgGrad=$('bgGrad');
 var rcard=$('rcard'),rn=$('rn'),ri=$('ri'),rv1=$('rv1'),rv2=$('rv2'),rv3=$('rv3'),rl1=$('rl1'),rl2=$('rl2'),rl3=$('rl3');
 var micSelect=$('micSelect'),testFill=$('testFill'),testLabel=$('testLabel'),startBtn=$('startBtn');
@@ -573,7 +569,6 @@ function log(m){debug.textContent=m;}
    we just toggle the .active class on/off depending on mic state. */
 function buildWaveBars(container,count){
     if(!container)return;
-    container.innerHTML='';
     for(var i=0;i<count;i++){
         var b=document.createElement('div');
         b.className='bar';
@@ -592,13 +587,22 @@ function setMic(on){
     if(micSmall)micSmall.classList.toggle('active',on);
     if(waveLeft)waveLeft.classList.toggle('active',on);
     if(waveRight)waveRight.classList.toggle('active',on);
-    if(vs1&&vs2){
-        if(on){vs1.textContent='Listening...';vs2.textContent='Speak now';}
-        else if(speaking){vs1.textContent='Speaking...';vs2.textContent='Please wait';}
-        else{vs1.textContent='';vs2.textContent='';}
-    }
 }
 function setStatus(m,s){statusMain.textContent=m||'';statusSub.textContent=s||'';}
+
+/* Puts short instructional text directly in place of the waveform bars
+   (used only while the kiosk is asleep, waiting for the wake word) -
+   e.g. "Say 'Hi PXT'" on the left, "to wake me up" on the right. */
+function setWavePrompt(leftText,rightText){
+    if(waveLeft){waveLeft.classList.add('text-mode');}
+    if(waveRight){waveRight.classList.add('text-mode');}
+    if(waveLeftLabel)waveLeftLabel.textContent=leftText||'';
+    if(waveRightLabel)waveRightLabel.textContent=rightText||'';
+}
+function clearWavePrompt(){
+    if(waveLeft)waveLeft.classList.remove('text-mode');
+    if(waveRight)waveRight.classList.remove('text-mode');
+}
 
 /* Top-left greeting text (time-of-day only - no user name shown here). */
 function updateGreeting(){
@@ -704,7 +708,8 @@ function goToSleep(){
     clearTimeout(sleepTimer);clearTimeout(wakeTimeoutTimer);
     hideCard();
     var bw=document.getElementById('badgeWrap');if(bw)bw.style.display='none';
-    setStatus("Say \"Hi PXT\" to wake me up","Listening in background...");
+    setStatus("","");
+    setWavePrompt('Say "Hi PXT"','to wake me up');
     setPill("PXT Hub • Sleeping");
     log("Status: Sleeping");
     startListening();
@@ -714,6 +719,7 @@ function wakeUp(){
     state='wake_listen';
     clearTimeout(wakeTimeoutTimer);
     hideCard();
+    clearWavePrompt();
     var bw=document.getElementById('badgeWrap');
     if(bw){
         bw.style.display='block';
