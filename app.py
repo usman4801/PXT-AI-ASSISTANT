@@ -489,7 +489,7 @@ function switchTheme(i){
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 if(!SR){startBtn.style.display='none';return;}
 
-var speaking=false,listening=false,rec=null,shouldRun=true,lastActivity=Date.now();
+var speaking=false,listening=false,rec=null,lastActivity=Date.now();
 var restartTimeout=null,micStream=null,selectedDeviceId=null,testStream=null,testMeter=null;
 var userName=null,userStaff=null,sleepTimer=null,chosenVoice=null,wakeTimeoutTimer=null;
 var state='sleep'; // sleep | wake_listen | ready
@@ -871,9 +871,16 @@ function handleQuery(raw){
     speak("I heard: "+raw+". You can ask me about your shift, off days, department, manager, or pickup point.",function(){startListening();});
 }
 
-/* ===== MAIN SPEECH RECOGNITION LOOP ===== */
+/* ===== MAIN SPEECH RECOGNITION LOOP =====
+   NOTE: listening is gated only by `speaking` (true while the kiosk itself
+   is talking, so the mic doesn't pick up its own voice). There is no
+   separate "permanently stopped" flag - a previous version used one
+   (shouldRun) that stopListening() set to false and nothing ever set back
+   to true, which silently killed the mic forever after the very first
+   thing the kiosk said. That was the root cause of the kiosk "hanging"
+   after login/replies and never waking back up. */
 function startListening(){
-    if(!shouldRun||speaking)return;
+    if(speaking)return;
     if(rec){try{rec.abort();}catch(e){}}
 
     rec=new SR();
@@ -918,12 +925,12 @@ function startListening(){
     rec.onerror=function(e){
         listening=false;setMic(false);
         if(e.error!=='no-speech'&&e.error!=='aborted') log("Mic error: "+e.error);
-        if(shouldRun&&!speaking) setTimeout(startListening,1000);
+        if(!speaking) setTimeout(startListening,1000);
     };
 
     rec.onend=function(){
         listening=false;setMic(false);
-        if(shouldRun&&!speaking&&state==='sleep'){
+        if(!speaking&&state==='sleep'){
             setTimeout(startListening,500);
         }
     };
@@ -932,13 +939,11 @@ function startListening(){
 }
 
 function stopListening(){
-    shouldRun=false;
     if(rec){try{rec.abort();}catch(e){}}
     listening=false;setMic(false);
 }
 
 function resumeListening(){
-    shouldRun=true;
     startListening();
 }
 
