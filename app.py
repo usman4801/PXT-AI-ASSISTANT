@@ -355,9 +355,7 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
    up their voice (vs. the old always-static big center icon). */
 .mic-bar{position:relative;z-index:2;display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:14px;}
 .wave{display:flex;align-items:center;gap:3px;height:34px;}
-.wave .bar{width:3px;border-radius:3px;height:6px;opacity:.3;transition:opacity .3s;}
-#waveLeft .bar{background:linear-gradient(180deg,#57d9ff,#3b82f6);}
-#waveRight .bar{background:linear-gradient(180deg,#ff6ec7,#c66bff);}
+.wave .bar{width:3px;border-radius:3px;background:linear-gradient(180deg,#57d9ff,#8a6bff);height:6px;opacity:.3;transition:opacity .3s;}
 .wave.active .bar{opacity:.95;animation:wavebounce 1s ease-in-out infinite;}
 .wave .bar:nth-child(2){animation-delay:.08s;}
 .wave .bar:nth-child(3){animation-delay:.16s;}
@@ -366,9 +364,9 @@ html,body{width:100%;height:100%;background:#05070c;font-family:'Segoe UI',Arial
 .wave .bar:nth-child(6){animation-delay:.2s;}
 .wave .bar:nth-child(7){animation-delay:.04s;}
 @keyframes wavebounce{0%,100%{height:6px;}50%{height:28px;}}
-.mic-btn{width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;border:none;box-shadow:none;transition:all .3s;flex-shrink:0;}
-.mic-btn .icon{font-size:22px;filter:drop-shadow(0 0 5px rgba(90,150,255,.6));}
-.mic-btn.active{box-shadow:0 0 22px rgba(90,150,255,.45);animation:micpulse 1.5s ease-in-out infinite;}
+.mic-btn{width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 35% 30%,rgba(120,150,255,.35),rgba(25,32,58,.7));border:2px solid rgba(120,150,255,.4);box-shadow:0 0 18px rgba(90,120,255,.22);transition:all .3s;flex-shrink:0;}
+.mic-btn .icon{font-size:21px;}
+.mic-btn.active{border-color:rgba(120,180,255,.85);box-shadow:0 0 26px rgba(90,150,255,.55);animation:micpulse 1.5s ease-in-out infinite;}
 @keyframes micpulse{0%,100%{box-shadow:0 0 18px rgba(90,150,255,.35);}50%{box-shadow:0 0 30px rgba(90,150,255,.7);}}
 
 .status-display{position:relative;z-index:2;text-align:center;max-width:500px;padding:0 20px;}
