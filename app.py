@@ -37,7 +37,13 @@ import streamlit.components.v1 as components
 # 0. CONFIG
 # ----------------------------------------------------------------------
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-ADMIN_PASSWORD = "pxt123"  # NOTE: for production, move this to st.secrets
+# Reads ADMIN_PASSWORD from st.secrets when a secrets.toml is configured,
+# otherwise falls back to the original default so nothing breaks for
+# anyone who hasn't set up secrets yet.
+try:
+    ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "pxt123")
+except Exception:
+    ADMIN_PASSWORD = "pxt123"
 
 st.set_page_config(
     page_title="PXT Hub Kiosk",
@@ -654,15 +660,26 @@ function speak(text,cb){
     setTimeout(fin,Math.max(text.length*100,3000)+5000);
 }
 
-/* ===== BADGE LOOKUP ===== */
+/* ===== BADGE LOOKUP =====
+   BUG FIX: this used to check exact-match and partial-match together in
+   a single pass over STAFF. That meant a loose partial match on an
+   EARLIER row could short-circuit the loop and return the wrong
+   employee, even when the TRUE exact match existed further down the
+   list. Exact match must always win, so it now gets its own full pass
+   over the whole list before partial matching is even attempted. */
 function findByBadge(id){
     id=id.trim();
+    // Pass 1: exact ID match, checked across the ENTIRE staff list first.
     for(var i=0;i<STAFF.length;i++){
-        var sid=String(STAFF[i].id).trim();
-        if(sid===id)return STAFF[i];
-        // Partial match (last 6 digits)
-        if(id.length>=6 && sid.indexOf(id)>=0)return STAFF[i];
-        if(id.length>=6 && sid.slice(-6)===id.slice(-6))return STAFF[i];
+        if(String(STAFF[i].id).trim()===id) return STAFF[i];
+    }
+    // Pass 2: only if no exact match anywhere, fall back to a loose
+    // partial / last-6-digits match.
+    if(id.length>=6){
+        for(var j=0;j<STAFF.length;j++){
+            var sid=String(STAFF[j].id).trim();
+            if(sid.indexOf(id)>=0 || sid.slice(-6)===id.slice(-6)) return STAFF[j];
+        }
     }
     return null;
 }
@@ -1030,16 +1047,25 @@ function startListening(){
         }
     };
 
+    /* BUG FIX: onerror used to schedule its own restart AND onend also
+       scheduled a restart (for the sleep state). Since the Web Speech
+       API always fires onend right after onerror, this queued up TWO
+       overlapping startListening() calls (one ~500ms out, one ~1000ms
+       out). The second call would abort() the recognizer the first one
+       had just started, so the mic kept getting torn down and rebuilt
+       every ~0.5-1s - especially disruptive while sleeping and trying
+       to catch the wake word. Restart is now scheduled in exactly one
+       place (onend, which always fires), so there's a single, predictable
+       restart per listening cycle. */
     rec.onerror=function(e){
         listening=false;setMic(false);
         if(e.error!=='no-speech'&&e.error!=='aborted') log("Mic error: "+e.error);
-        if(!speaking) setTimeout(startListening,1000);
     };
 
     rec.onend=function(){
         listening=false;setMic(false);
-        if(!speaking&&state==='sleep'){
-            setTimeout(startListening,500);
+        if(!speaking){
+            setTimeout(startListening, state==='sleep' ? 500 : 300);
         }
     };
 
