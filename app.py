@@ -730,11 +730,11 @@ function extractBadgeFromSpeech(raw){
 /* Quick answers during wake_listen ("who are you", "what can you do") */
 function handlePreLoginQuery(raw){
     var n=norm(raw);
-    if(n.indexOf("who are you")>=0 || n.indexOf("what are you")>=0 || n.indexOf("your name")>=0){
-        speak("I am PXT Hub, your voice assistant. Please state your Badge ID number so I can help you.", function(){startListening();});
+    if(isIdentityQuery(n)){
+        speak("I am PXT AI Assistant, your virtual HR assistant. I can help with HR-related questions like your shift, off days, department, manager, pickup point, and other details. Please state or enter your Badge ID number to log in and get started.", function(){startListening();});
         return true;
     }
-    if(n.indexOf("what can you do")>=0 || n.indexOf("help")>=0 || n.indexOf("options")>=0){
+    if(n.indexOf("help")>=0 || n.indexOf("options")>=0){
         speak("I can check your shift, off days, department, manager, and details. Please state your Badge ID number to get started.", function(){startListening();});
         return true;
     }
@@ -796,6 +796,35 @@ function humanize(s){
 function matchAny(n,phrases){
     for(var i=0;i<phrases.length;i++){ if(n.indexOf(phrases[i])>=0) return true; }
     return false;
+}
+
+/* ===== IDENTITY & CAPABILITY INTENT =====
+   Employees ask "who are you" / "what can you do" / "what is PXT" in many
+   different ways, phrased naturally, incompletely, or garbled by
+   speech-to-text. This single shared list is used both before badge
+   login (handlePreLoginQuery) and after login (handleQuery) so the
+   assistant recognizes the same intent - and responds appropriately for
+   whichever situation the employee is in - no matter how it's asked. */
+var IDENTITY_PHRASES=[
+    "who are you","what are you","who r u","what r u","who is this","who am i talking to",
+    "what is pxt ai assistant","what is pxt","explain pxt ai assistant","explain pxt",
+    "what can you do","what can you help me with","how can you help me",
+    "how do you help employees","what do you do","tell me about yourself",
+    "tell me what you can do","how can i use you","what can i ask you",
+    "what kind of questions can i ask","kind of questions can i ask",
+    "what are you here for","what is your purpose","whats your purpose","your purpose",
+    "why should i use you","how can you assist me","can you help me with hr",
+    "help me with hr","are you an hr assistant","are you an ai assistant",
+    "what is this assistant","how does this assistant help me",
+    "what services do you provide","what hr things can you help with",
+    "hr things can you help","what do you know about hr","how can pxt help me",
+    "give me an introduction","introduce yourself","what can i do with you",
+    "how do i interact with you","what should i ask you",
+    "can you answer my hr questions","answer my hr questions",
+    "your name","your identity","what is your name"
+];
+function isIdentityQuery(n){
+    return matchAny(n,IDENTITY_PHRASES);
 }
 
 /* Process queries once logged in. Employees rarely use the exact column
@@ -911,8 +940,15 @@ function handleQuery(raw){
         return;
     }
 
+    // Identity & Capability ("who are you", "what can you do", "what is PXT", etc.)
+    if(isIdentityQuery(n)){
+        var msg="I am PXT AI Assistant, your virtual HR assistant"+(userName?", "+userName:"")+". I can help with things like your shift, off days, job title, department, manager, pickup point, phone number, email, and joining date. What would you like to know?";
+        speak(msg,function(){startListening();});
+        return;
+    }
+
     // Help / Options
-    if(matchAny(n,["help","what can you do","options","menu"])){
+    if(matchAny(n,["help","options","menu"])){
         speak("You can ask me about your shift, off days, job title, department, manager, pickup point, phone number, email, or joining date.",function(){startListening();});
         return;
     }
