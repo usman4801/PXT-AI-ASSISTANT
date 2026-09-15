@@ -36,7 +36,6 @@ import streamlit.components.v1 as components
 # 0. CONFIG
 # ----------------------------------------------------------------------
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-ADMIN_PASSWORD = "pxt123"  # NOTE: for production, move this to st.secrets
 
 st.set_page_config(
     page_title="PXT Hub Kiosk",
@@ -234,48 +233,7 @@ def load_themes() -> list:
 
 
 # ----------------------------------------------------------------------
-# 2. ADMIN SIDEBAR (password-protected data upload)
-# ----------------------------------------------------------------------
-with st.sidebar:
-    st.markdown("### PXT Admin")
-    pwd = st.text_input("Password", type="password", placeholder="Admin password")
-
-    if pwd:
-        if pwd == ADMIN_PASSWORD:
-            st.success("Access Granted")
-
-            uploaded = st.file_uploader("Upload data.csv or data.xlsx", type=["csv", "xlsx"])
-            if uploaded:
-                try:
-                    target_name = "data.csv" if uploaded.name.endswith(".csv") else "data.xlsx"
-                    save_path = os.path.join(APP_DIR, target_name)
-                    with open(save_path, "wb") as f:
-                        f.write(uploaded.getbuffer())
-                    st.success("File uploaded successfully!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(str(e))
-
-            staff_preview = load_staff_data()
-            st.caption(f"{len(staff_preview)} staff records loaded.")
-            if DATA_FILE.endswith(".xlsx"):
-                st.caption(f"Reading sheet: '{_pick_best_sheet(DATA_FILE)}'")
-            if staff_preview:
-                st.dataframe(pd.DataFrame(staff_preview), use_container_width=True)
-
-            theme_preview = load_themes()
-            if theme_preview:
-                st.caption(
-                    f"{len(theme_preview)} background theme video(s) loaded: "
-                    + ", ".join(t["name"] for t in theme_preview)
-                )
-            else:
-                st.caption("No background theme video found - add banner.mp4 next to app.py.")
-        else:
-            st.error("Incorrect password")
-
-# ----------------------------------------------------------------------
-# 3. HIDE STREAMLIT CHROME & UI CLEANUP
+# 2. HIDE STREAMLIT CHROME & UI CLEANUP
 # ----------------------------------------------------------------------
 st.markdown(
     """
@@ -302,7 +260,7 @@ st.markdown(
 )
 
 # ----------------------------------------------------------------------
-# 4. SINGLE-FILE KIOSK HTML/JS/VOICE COMPONENT
+# 3. SINGLE-FILE KIOSK HTML/JS/VOICE COMPONENT
 #    The full kiosk frontend is embedded below as a raw string (not an
 #    f-string) to avoid having to escape the JS's own curly braces.
 #    __STAFF__ and __THEMES__ are simple text placeholders swapped out
